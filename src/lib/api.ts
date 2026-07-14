@@ -49,6 +49,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return body.data
 }
 
+/**
+ * Multipart upload (logo/banner) — sin Content-Type: application/json, el
+ * navegador pone el boundary correcto solo si no lo pisamos nosotros.
+ */
+async function uploadFile<T>(path: string, form: FormData): Promise<T> {
+  if (!BASE_URL) {
+    throw new Error('VITE_LOYALTY_API_URL no está configurado')
+  }
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: form })
+  const body = await res.json().catch(() => ({ error: { code: 'UNKNOWN', message: res.statusText } }))
+  if (!res.ok) {
+    const err = body?.error ?? { code: 'HTTP_ERROR', message: res.statusText }
+    throw Object.assign(new Error(err.message), { code: err.code, status: res.status })
+  }
+  return (body as ApiResponse<T>).data
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -56,4 +77,5 @@ export const api = {
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  uploadFile,
 }

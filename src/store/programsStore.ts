@@ -30,6 +30,7 @@ interface ProgramsState {
   createProgram: (data: {
     name: string; type: 'points' | 'visits'; brandColor: string; programName: string
     description: string; welcomeMessage?: string
+    saldoLabel?: string | null; businessInfo?: LoyaltyProgram['businessInfo']
     config: Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>
   }) => Promise<LoyaltyProgram>
   updateProgram: (programId: string, data: Partial<LoyaltyProgram>, config?: Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) => Promise<void>

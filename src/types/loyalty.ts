@@ -1,5 +1,13 @@
 export type ProgramType = 'points' | 'visits'
 
+export interface LoyaltyBusinessInfo {
+  terms?: string
+  phone?: string
+  address?: string
+  website?: string
+  socials?: { instagram?: string; facebook?: string }
+}
+
 export interface LoyaltyProgram {
   id: string
   businessId: string
@@ -12,6 +20,8 @@ export interface LoyaltyProgram {
   programName: string
   description: string
   welcomeMessage: string | null
+  saldoLabel: string | null
+  businessInfo: LoyaltyBusinessInfo | null
   createdAt: string
   updatedAt: string
 }
@@ -28,6 +38,10 @@ export interface LoyaltyPointsConfig {
   minPointsToRedeem: number
   allowPartialRedemption: boolean
   maxVisitsPerDay: number
+  // Puntos sin POS vinculado: timestamp de cuando el comerciante aceptó el
+  // riesgo de fraude (nadie más que el propio empleado valida el monto
+  // tecleado). Null si tiene POS vinculado.
+  noPosRiskAcknowledgedAt: string | null
 }
 
 export interface LoyaltyVisitsConfig {
