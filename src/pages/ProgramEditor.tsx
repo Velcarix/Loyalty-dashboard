@@ -29,6 +29,8 @@ interface Form {
   visitsTarget: string
   rewardDescription: string
   maxVisitsPerDay: string
+  visitsVisualStyle: 'number' | 'stamp'
+  stampImageUrl: string
   // Puntos sin POS vinculado — timestamp de cuando el comerciante aceptó el
   // riesgo de fraude (nadie más que el propio empleado valida el monto tecleado).
   pointsRiskAcceptedAt: string | null
@@ -55,6 +57,8 @@ const DEFAULTS: Form = {
   visitsTarget: '10',
   rewardDescription: '',
   maxVisitsPerDay: '1',
+  visitsVisualStyle: 'number',
+  stampImageUrl: '',
   pointsRiskAcceptedAt: null,
 }
 
@@ -160,10 +164,13 @@ export function ProgramEditor() {
   // después de crear el programa en handleSubmit() — no hay programId antes.
   const [logoPending, setLogoPending] = useState<PendingFile | null>(null)
   const [bannerPending, setBannerPending] = useState<PendingFile | null>(null)
+  const [stampPending, setStampPending] = useState<PendingFile | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [uploadingStamp, setUploadingStamp] = useState(false)
   const [logoError, setLogoError] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<string | null>(null)
+  const [stampError, setStampError] = useState<string | null>(null)
 
   async function handlePickImage(kind: 'logo' | 'banner', file: File) {
     const setUploading = kind === 'logo' ? setUploadingLogo : setUploadingBanner
@@ -187,6 +194,32 @@ export function ProgramEditor() {
       setFieldError(err?.message ?? `No se pudo subir el ${kind === 'logo' ? 'logo' : 'banner'}`)
     } finally {
       setUploading(false)
+    }
+  }
+
+  // Imagen del sello (tarjeta de sellos): mismo patrón que logo/banner —
+  // sube de inmediato si el programa ya existe, o queda pendiente hasta
+  // crearlo. Es un asset de la config de visitas, no del programa, por eso
+  // usa su propio endpoint en vez de handlePickImage.
+  async function handlePickStamp(file: File) {
+    setStampError(null)
+    const previewUrl = URL.createObjectURL(file)
+
+    if (!isEditing || !programId) {
+      setStampPending({ file, previewUrl })
+      return
+    }
+
+    setUploadingStamp(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const updated = await api.uploadFile<{ stampImageUrl: string }>(`/api/v1/loyalty/programs/${programId}/config/visits/stamp`, body)
+      setForm(f => ({ ...f, stampImageUrl: updated.stampImageUrl ?? '' }))
+    } catch (err: any) {
+      setStampError(err?.message ?? 'No se pudo subir la imagen del sello')
+    } finally {
+      setUploadingStamp(false)
     }
   }
 
@@ -235,6 +268,8 @@ export function ProgramEditor() {
       visitsTarget: vc?.visitsTarget?.toString() ?? DEFAULTS.visitsTarget,
       rewardDescription: vc?.rewardDescription ?? '',
       maxVisitsPerDay: (pc?.maxVisitsPerDay ?? vc?.maxVisitsPerDay ?? 1).toString(),
+      visitsVisualStyle: vc?.visualStyle ?? 'number',
+      stampImageUrl: vc?.stampImageUrl ?? '',
       pointsRiskAcceptedAt: pc?.noPosRiskAcknowledgedAt ?? null,
     })
   }, [programId, programs])
@@ -253,6 +288,7 @@ export function ProgramEditor() {
           visitsTarget: parseInt(form.visitsTarget),
           rewardDescription: form.rewardDescription,
           maxVisitsPerDay: parseInt(form.maxVisitsPerDay),
+          visualStyle: form.visitsVisualStyle,
         }
   }
 
@@ -302,6 +338,10 @@ export function ProgramEditor() {
         if (bannerPending) {
           const body = new FormData(); body.append('file', bannerPending.file)
           await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/banner`, body).catch(() => {})
+        }
+        if (stampPending) {
+          const body = new FormData(); body.append('file', stampPending.file)
+          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/config/visits/stamp`, body).catch(() => {})
         }
         navigate(`/programas/${created.id}`)
       }
@@ -395,15 +435,30 @@ export function ProgramEditor() {
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-700">Color principal</label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {PRESET_COLORS.map(c => (
                 <button key={c} type="button" onClick={() => setForm(f => ({ ...f, brandColor: c }))}
                   style={{ backgroundColor: c }}
                   className={`h-8 w-8 rounded-lg ${form.brandColor === c ? 'ring-2 ring-offset-2 ring-primary' : ''}`} />
               ))}
+              <label
+                title="Elegir cualquier color"
+                className="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-gray-300"
+                style={{
+                  backgroundImage: 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)',
+                }}
+              >
+                <input
+                  type="color"
+                  value={form.brandColor}
+                  onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                />
+              </label>
               <input value={form.brandColor} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))}
                 className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-xs font-mono" />
             </div>
+            <p className="mt-1 text-xs text-gray-400">Elige un preset, cualquier color con la rueda, o escribe el hex.</p>
           </div>
 
           {form.type === 'points' ? (
@@ -430,6 +485,39 @@ export function ProgramEditor() {
                 <input required value={form.rewardDescription} onChange={e => setForm(f => ({ ...f, rewardDescription: e.target.value }))}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" placeholder="Ej: Café americano gratis" />
               </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Formato de progreso</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, visitsVisualStyle: 'number' }))}
+                    className={`rounded-lg border-2 px-3 py-3 text-left text-sm ${form.visitsVisualStyle === 'number' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}
+                  >
+                    <p className="font-bold">🔢 Número</p>
+                    <p className="text-xs text-gray-500">Ej: 3/10</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, visitsVisualStyle: 'stamp' }))}
+                    className={`rounded-lg border-2 px-3 py-3 text-left text-sm ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5' : 'border-gray-200'}`}
+                  >
+                    <p className="font-bold">⭕ Sellos</p>
+                    <p className="text-xs text-gray-500">Tarjeta de sellos personalizada</p>
+                  </button>
+                </div>
+              </div>
+
+              {form.visitsVisualStyle === 'stamp' && (
+                <ImagePickerField
+                  label="Imagen del sello"
+                  hint="PNG cuadrado o circular, fondo transparente, máx. 1 MB"
+                  previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)}
+                  uploading={uploadingStamp}
+                  error={stampError}
+                  onPick={handlePickStamp}
+                />
+              )}
             </>
           )}
 
@@ -493,7 +581,12 @@ export function ProgramEditor() {
               saldoLabel: form.saldoLabel || null,
             }}
             config={form.type === 'visits'
-              ? { visitsTarget: parseInt(form.visitsTarget) || 10, rewardDescription: form.rewardDescription }
+              ? {
+                  visitsTarget: parseInt(form.visitsTarget) || 10,
+                  rewardDescription: form.rewardDescription,
+                  visualStyle: form.visitsVisualStyle,
+                  stampImageUrl: stampPending?.previewUrl ?? (form.stampImageUrl || null),
+                }
               : { centPerPoint: parseInt(form.centPerPoint) || 100, minPointsToRedeem: parseInt(form.minPointsToRedeem) || 10 }}
           />
         </div>

@@ -49,6 +49,11 @@ export interface LoyaltyVisitsConfig {
   visitsTarget: number
   rewardDescription: string
   maxVisitsPerDay: number
+  // Formato de progreso en el pass: número simple (3/10) o tarjeta de
+  // sellos visual. Con 'stamp', stampImageUrl es la imagen que reemplaza
+  // el sello relleno al registrar una visita.
+  visualStyle?: 'number' | 'stamp'
+  stampImageUrl?: string | null
 }
 
 export type RewardType = 'free_product' | 'pct_discount' | 'fixed_discount' | 'bxgy' | 'bonus_points' | 'vip_exclusive'
