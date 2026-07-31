@@ -53,8 +53,26 @@ export function Settings() {
   const [pairingCode, setPairingCode] = useState<{ code: string; expiresAt: string } | null>(null)
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState(false)
+  const [sessionSeconds, setSessionSeconds] = useState(90)
+  const [savingSession, setSavingSession] = useState(false)
+  const [sessionSaved, setSessionSaved] = useState(false)
 
   useEffect(() => { void refreshProfile() }, [])
+  useEffect(() => {
+    if (merchant) setSessionSeconds(merchant.mostradorSessionSeconds)
+  }, [merchant?.mostradorSessionSeconds])
+
+  async function handleSaveSession() {
+    setSavingSession(true)
+    setSessionSaved(false)
+    try {
+      await api.put('/api/v1/merchant', { mostradorSessionSeconds: sessionSeconds })
+      await refreshProfile()
+      setSessionSaved(true)
+    } finally {
+      setSavingSession(false)
+    }
+  }
 
   async function handleGenerateCode() {
     setGenerating(true)
@@ -92,6 +110,31 @@ export function Settings() {
         {locations.length === 0 ? <p className="text-sm text-gray-400">Sin ubicaciones</p> : (
           locations.map(l => <LocationRow key={l.id} location={l} onRenamed={refreshProfile} />)
         )}
+      </SectionCard>
+
+      <SectionCard title="Mostrador de visitas">
+        <p className="mb-3 text-xs text-gray-500">
+          Segundos que la sesión de un cliente queda desbloqueada en el Mostrador antes de pedir identificarse de nuevo.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={10}
+            max={600}
+            value={sessionSeconds}
+            onChange={e => setSessionSeconds(Number(e.target.value))}
+            className="w-24 rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+          />
+          <span className="text-xs text-gray-500">segundos</span>
+          <button
+            onClick={handleSaveSession}
+            disabled={savingSession || sessionSeconds < 10 || sessionSeconds > 600}
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {savingSession ? 'Guardando…' : 'Guardar'}
+          </button>
+          {sessionSaved && <span className="text-xs text-green-600">Guardado ✓</span>}
+        </div>
       </SectionCard>
 
       <SectionCard title="Conectar Copo POS">

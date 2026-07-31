@@ -127,6 +127,7 @@ export interface MerchantProfile {
   vertical: string | null
   phone: string | null
   plan: string
+  mostradorSessionSeconds: number
 }
 
 export interface MerchantLocation {
