@@ -6,7 +6,7 @@ import { WalletPassPreview } from '@/components/WalletPassPreview'
 import { api } from '@/lib/api'
 import type { LoyaltyPointsConfig, LoyaltyVisitsConfig, LoyaltyProgram, LoyaltyBusinessInfo } from '@/types/loyalty'
 
-const PRESET_COLORS = ['#7C3AED', '#2563EB', '#DB2777', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#374151']
+const PRESET_COLORS = ['#2563EB', '#1D4ED8', '#7C3AED', '#DB2777', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#374151']
 
 interface Form {
   type: 'points' | 'visits'
@@ -40,7 +40,7 @@ const DEFAULTS: Form = {
   type: 'points',
   programName: '',
   description: '',
-  brandColor: '#7C3AED',
+  brandColor: '#2563EB',
   logoUrl: '',
   bannerUrl: '',
   saldoLabel: '',

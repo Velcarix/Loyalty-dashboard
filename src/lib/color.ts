@@ -1,9 +1,16 @@
 export function getTextColorForBg(hex: string): '#FFFFFF' | '#000000' {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-  return luminance > 0.55 ? '#000000' : '#FFFFFF'
+  const normalized = hex.trim().replace(/^#/, '')
+  const fullHex = normalized.length === 3
+    ? normalized.split('').map(char => char + char).join('')
+    : normalized
+  if (!/^[0-9a-f]{6}$/i.test(fullHex)) return '#FFFFFF'
+
+  const channels = [0, 2, 4].map(index => parseInt(fullHex.slice(index, index + 2), 16) / 255)
+  const [r, g, b] = channels.map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+  const backgroundLuminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+  const whiteContrast = 1.05 / (backgroundLuminance + 0.05)
+  const blackContrast = (backgroundLuminance + 0.05) / 0.05
+  return whiteContrast >= 4.5 && whiteContrast >= blackContrast ? '#FFFFFF' : '#000000'
 }
 
 export function calcPointsEarned(amountCents: number, config: { minPurchaseCents: number; pointsPerCent: number; maxPointsPerPurchase: number | null }): number {

@@ -24,7 +24,8 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-primary">Copo Loyalty</h1>
+          <div role="img" aria-label="Copo" className="mx-auto h-20 w-48 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
+          <h1 className="sr-only">Copo Loyalty</h1>
           <p className="mt-1 text-sm text-gray-500">Inicia sesión en tu cuenta</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-white p-6 shadow-sm">
@@ -54,7 +55,7 @@ export function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-primary py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            className="w-full rounded-lg bg-primary py-2.5 text-sm font-bold text-white transition-[background-color,transform] duration-150 hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 active:scale-[0.98] disabled:opacity-50"
           >
             {loading ? 'Entrando…' : 'Iniciar sesión'}
           </button>

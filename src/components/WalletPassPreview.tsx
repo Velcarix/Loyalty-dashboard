@@ -39,7 +39,7 @@ function StampGrid({
 }
 
 export function WalletPassPreview({ program, config, sampleBalance = 150, sampleVisits = 3 }: Props) {
-  const color = program.brandColor ?? '#7C3AED'
+  const color = program.brandColor ?? '#2563EB'
   const textColor = getTextColorForBg(color)
   const subColor = textColor === '#000000' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.65)'
   const isPoints = program.type === 'points'
@@ -66,9 +66,11 @@ export function WalletPassPreview({ program, config, sampleBalance = 150, sample
         />
       )}
       <div className="relative flex h-full flex-col justify-between p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex min-w-0 items-center justify-between gap-2">
           {program.logoUrl ? (
-            <img src={program.logoUrl} alt="" className="h-9 w-9 object-contain" />
+            <span className="flex h-11 min-w-11 max-w-24 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
+              <img src={program.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
+            </span>
           ) : (
             <div
               className="flex h-9 w-9 items-center justify-center rounded-lg border text-xs font-bold"
@@ -77,7 +79,7 @@ export function WalletPassPreview({ program, config, sampleBalance = 150, sample
               {(program.programName ?? 'LP').slice(0, 2).toUpperCase()}
             </div>
           )}
-          <span className="text-xs font-semibold" style={{ color: subColor }}>{program.programName ?? 'Loyalty Program'}</span>
+          <span className="min-w-0 truncate text-right text-xs font-semibold" style={{ color: subColor }}>{program.programName ?? 'Loyalty Program'}</span>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: subColor }}>{saldoLabel}</p>
