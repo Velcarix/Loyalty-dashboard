@@ -8,6 +8,36 @@ interface Props {
   sampleVisits?: number
 }
 
+function StampGrid({
+  target, filled, stampImageUrl, textColor, subColor,
+}: {
+  target: number
+  filled: number
+  stampImageUrl?: string | null
+  textColor: string
+  subColor: string
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {Array.from({ length: Math.max(target, 1) }).map((_, i) => {
+        const isFilled = i < filled
+        return (
+          <div
+            key={i}
+            className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{
+              border: `2px ${isFilled ? 'solid' : 'dashed'} ${isFilled ? textColor : subColor}`,
+              backgroundColor: isFilled && !stampImageUrl ? textColor : 'transparent',
+            }}
+          >
+            {isFilled && stampImageUrl && <img src={stampImageUrl} alt="" className="h-full w-full object-cover" />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function WalletPassPreview({ program, config, sampleBalance = 150, sampleVisits = 3 }: Props) {
   const color = program.brandColor ?? '#7C3AED'
   const textColor = getTextColorForBg(color)
@@ -51,8 +81,20 @@ export function WalletPassPreview({ program, config, sampleBalance = 150, sample
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: subColor }}>{saldoLabel}</p>
-          <p className="text-3xl font-bold" style={{ color: textColor }}>{isPoints ? sampleBalance : `${sampleVisits}${target ? `/${target}` : ''}`}</p>
-          {progressText && <p className="mt-0.5 text-xs font-medium" style={{ color: subColor }}>{progressText}</p>}
+          {!isPoints && visitsConfig?.visualStyle === 'stamp' ? (
+            <div className="mt-1.5">
+              <StampGrid
+                target={target ?? 10}
+                filled={sampleVisits}
+                stampImageUrl={visitsConfig?.stampImageUrl}
+                textColor={textColor}
+                subColor={subColor}
+              />
+            </div>
+          ) : (
+            <p className="text-3xl font-bold" style={{ color: textColor }}>{isPoints ? sampleBalance : `${sampleVisits}${target ? `/${target}` : ''}`}</p>
+          )}
+          {progressText && <p className="mt-1 text-xs font-medium" style={{ color: subColor }}>{progressText}</p>}
         </div>
         <p className="truncate text-xs" style={{ color: subColor }}>{program.description ?? 'Acumula y canjea beneficios'}</p>
       </div>
