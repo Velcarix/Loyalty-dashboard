@@ -236,7 +236,6 @@ export function ProgramEditor() {
     if (antifraudLocked && form.maxVisitsPerDay !== '1') {
       setForm(f => ({ ...f, maxVisitsPerDay: '1' }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [antifraudLocked])
 
   useEffect(() => {

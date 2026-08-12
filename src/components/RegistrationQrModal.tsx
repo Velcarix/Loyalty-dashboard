@@ -45,17 +45,19 @@ export function RegistrationQrModal({ program, onClose }: Props) {
     if (!canvas) return
     const win = window.open('', '_blank')
     if (!win) return
-    win.document.write(`
-      <html>
-        <head><title>QR — ${program.programName}</title></head>
-        <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-          <h2>${program.programName}</h2>
-          <img src="${canvas.toDataURL('image/png')}" width="300" height="300" />
-          <p>Escanea para unirte</p>
-        </body>
-      </html>
-    `)
-    win.document.close()
+    const { document: printDocument } = win
+    printDocument.title = `QR — ${program.programName}`
+    printDocument.body.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;'
+    const title = printDocument.createElement('h2')
+    title.textContent = program.programName
+    const image = printDocument.createElement('img')
+    image.src = canvas.toDataURL('image/png')
+    image.width = 300
+    image.height = 300
+    image.alt = `QR de registro de ${program.programName}`
+    const instruction = printDocument.createElement('p')
+    instruction.textContent = 'Escanea para unirte'
+    printDocument.body.replaceChildren(title, image, instruction)
     win.focus()
     win.print()
   }
