@@ -291,6 +291,12 @@ export function ProgramEditor() {
         }
   }
 
+  function normalizeWebsite(value: string): string | undefined {
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  }
+
   function buildBusinessInfo(): LoyaltyBusinessInfo | null {
     const hasAny = form.businessTerms || form.businessPhone || form.businessAddress
       || form.businessWebsite || form.businessInstagram || form.businessFacebook
@@ -300,7 +306,7 @@ export function ProgramEditor() {
       terms: form.businessTerms || undefined,
       phone: form.businessPhone || undefined,
       address: form.businessAddress || undefined,
-      website: form.businessWebsite || undefined,
+      website: normalizeWebsite(form.businessWebsite),
       socials: hasSocials ? {
         instagram: form.businessInstagram || undefined,
         facebook: form.businessFacebook || undefined,
