@@ -18,7 +18,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen bg-[#F7F9FC] text-ink">
-      <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 self-start flex-col overflow-y-auto border-r border-slate-200 bg-white md:flex">
         <div className="border-b border-slate-100 px-5 py-5">
           <div role="img" aria-label="Copo" className="h-11 w-32 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
           <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Loyalty</p>
@@ -50,7 +50,7 @@ export function Layout() {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur md:hidden">
           <div role="img" aria-label="Copo" className="h-9 w-24 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
           <div className="flex items-center gap-1">
