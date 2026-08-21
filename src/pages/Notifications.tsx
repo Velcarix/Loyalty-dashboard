@@ -24,7 +24,8 @@ export function Notifications() {
 
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
-  const [emailEnabled, setEmailEnabled] = useState(true)
+  const [appleWalletEnabled, setAppleWalletEnabled] = useState(true)
+  const [emailEnabled, setEmailEnabled] = useState(false)
   const [filters, setFilters] = useState<AudienceFilter>({})
   const [previewCount, setPreviewCount] = useState<number | null>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -49,13 +50,16 @@ export function Notifications() {
 
   async function handleSend() {
     if (!programId || !title.trim() || !message.trim()) return
-    const channels: NotificationChannel[] = emailEnabled ? ['email'] : []
+    const channels: NotificationChannel[] = [
+      ...(appleWalletEnabled ? ['push' as const] : []),
+      ...(emailEnabled ? ['email' as const] : []),
+    ]
     if (channels.length === 0) { setResult('Selecciona al menos un canal'); return }
     setSending(true)
     setResult('')
     try {
       const notification = await sendNotification(programId, { title: title.trim(), message: message.trim(), channels, targetSegment: filters.segment, targetFilters: filters })
-      setResult(`Enviado a ${notification.recipientCount} cliente(s) — ${notification.deliveredCount} por email.`)
+      setResult(`Enviado a ${notification.recipientCount} cliente(s) — ${notification.deliveredCount} recibieron el aviso.`)
       setTitle(''); setMessage(''); setFilters({}); setPreviewCount(null)
     } catch (err: any) {
       setResult(err?.message ?? 'No se pudo enviar')
@@ -100,12 +104,12 @@ export function Notifications() {
           <label className="mb-1 block text-xs font-semibold text-gray-600">Canales</label>
           <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={appleWalletEnabled} onChange={e => setAppleWalletEnabled(e.target.checked)} />
+              Apple Wallet (banner en la tarjeta de quien ya la agregó a su Wallet)
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
               Email (a quien dio su correo y aceptó recibir novedades)
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-400">
-              <input type="checkbox" disabled />
-              Push (próximamente)
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-400">
               <input type="checkbox" disabled />
