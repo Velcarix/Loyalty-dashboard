@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { getTextColorForBg } from '@/lib/color'
 import type { LoyaltyProgram } from '@/types/loyalty'
 
-const FRONTEND_URL = (import.meta.env.VITE_PUBLIC_FRONTEND_URL as string | undefined) ?? 'https://copopos.com'
+const FRONTEND_URL = (import.meta.env.VITE_PUBLIC_FRONTEND_URL as string | undefined) ?? 'https://joinloyalty.copopos.com'
 
 interface Props {
   program: LoyaltyProgram
