@@ -1,15 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { useAuthStore } from '@/store/authStore'
 
 export function CustomerDetail() {
   const { programId, customerId } = useParams<{ programId: string; customerId: string }>()
-  const { customers, transactions, loadCustomers, loadTransactions, adjustPoints } = useProgramsStore()
+  const navigate = useNavigate()
+  const { customers, transactions, loadCustomers, loadTransactions, adjustPoints, updateCustomer, deleteCustomer } = useProgramsStore()
   const merchant = useAuthStore(s => s.merchant)
   const [delta, setDelta] = useState('')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editError, setEditError] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!programId) return
@@ -33,6 +42,47 @@ export function CustomerDetail() {
     }
   }
 
+  function startEditing() {
+    if (!customer) return
+    setEditName(customer.name)
+    setEditPhone(customer.phone)
+    setEditEmail(customer.email ?? '')
+    setEditError('')
+    setIsEditing(true)
+  }
+
+  async function handleSaveEdit() {
+    if (!programId || !customerId) return
+    if (editName.trim().length < 2) { setEditError('El nombre es muy corto'); return }
+    setSavingEdit(true)
+    setEditError('')
+    try {
+      await updateCustomer(programId, customerId, {
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        email: editEmail.trim() || null,
+      })
+      setIsEditing(false)
+    } catch (err: any) {
+      setEditError(err?.message ?? 'No se pudo guardar')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!programId || !customerId || !customer) return
+    if (!confirm(`¿Eliminar a "${customer.name}" y todo su historial de transacciones? Esta acción no se puede deshacer.`)) return
+    setDeleting(true)
+    try {
+      await deleteCustomer(programId, customerId)
+      navigate(`/programas/${programId}/clientes`)
+    } catch (err: any) {
+      alert(err?.message ?? 'No se pudo eliminar el cliente')
+      setDeleting(false)
+    }
+  }
+
   if (!customer) return <p className="py-10 text-center text-sm text-gray-400">Cargando cliente…</p>
 
   return (
@@ -40,9 +90,39 @@ export function CustomerDetail() {
       <Link to={`/programas/${programId}/clientes`} className="text-sm text-primary">← Clientes</Link>
       <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="rounded-2xl bg-white p-5 shadow-sm md:col-span-1">
-          <h2 className="text-lg font-bold text-gray-900">{customer.name}</h2>
-          <p className="text-sm text-gray-500">{customer.phone}</p>
-          {customer.email && <p className="text-xs text-gray-400">{customer.email}</p>}
+          {isEditing ? (
+            <div className="space-y-2">
+              <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Nombre"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+              <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="Teléfono"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+              <input value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="Email (opcional)"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+              {editError && <p className="text-xs text-red-600">{editError}</p>}
+              <div className="flex gap-2">
+                <button onClick={handleSaveEdit} disabled={savingEdit}
+                  className="flex-1 rounded-lg bg-primary py-2 text-xs font-bold text-white disabled:opacity-50">
+                  {savingEdit ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button onClick={() => setIsEditing(false)} disabled={savingEdit}
+                  className="flex-1 rounded-lg border border-gray-200 py-2 text-xs font-semibold text-gray-600 disabled:opacity-50">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{customer.name}</h2>
+                <p className="text-sm text-gray-500">{customer.phone}</p>
+                {customer.email && <p className="text-xs text-gray-400">{customer.email}</p>}
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button onClick={startEditing} title="Editar" className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700">✎</button>
+                <button onClick={handleDelete} disabled={deleting} title="Eliminar" className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50">🗑</button>
+              </div>
+            </div>
+          )}
 
           {customer.hasPendingReward && (
             <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">

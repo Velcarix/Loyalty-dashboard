@@ -38,6 +38,8 @@ interface ProgramsState {
 
   loadCustomers: (programId: string) => Promise<void>
   adjustPoints: (programId: string, customerId: string, delta: number, note: string, adjustedBy: string) => Promise<void>
+  updateCustomer: (programId: string, customerId: string, data: { name?: string; phone?: string; email?: string | null }) => Promise<void>
+  deleteCustomer: (programId: string, customerId: string) => Promise<void>
 
   loadTransactions: (programId: string) => Promise<void>
 
@@ -136,6 +138,16 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
         ? { ...c, pointsBalance: c.pointsBalance + delta, totalEarnedPoints: delta > 0 ? c.totalEarnedPoints + delta : c.totalEarnedPoints }
         : c),
     }))
+  },
+
+  updateCustomer: async (programId, customerId, data) => {
+    const updated = await api.put<LoyaltyCustomer>(`/api/v1/loyalty/programs/${programId}/customers/${customerId}`, data)
+    set(s => ({ customers: s.customers.map(c => c.id === customerId ? updated : c) }))
+  },
+
+  deleteCustomer: async (programId, customerId) => {
+    await api.delete(`/api/v1/loyalty/programs/${programId}/customers/${customerId}`)
+    set(s => ({ customers: s.customers.filter(c => c.id !== customerId) }))
   },
 
   loadTransactions: async (programId) => {
