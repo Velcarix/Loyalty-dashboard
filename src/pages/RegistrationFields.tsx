@@ -74,7 +74,7 @@ export function RegistrationFields() {
         <label className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5">
           <div>
             <p className="text-sm font-semibold text-gray-900">Fecha de nacimiento</p>
-            <p className="text-xs text-gray-400">Solo mes y día — útil para promociones de cumpleaños</p>
+            <p className="text-xs text-gray-400">Con año — habilita filtrar por edad en Notificaciones y Recompensas</p>
           </div>
           <input type="checkbox" checked={askBirthday} onChange={e => setAskBirthday(e.target.checked)} className="h-5 w-5 accent-primary" />
         </label>
@@ -162,7 +162,7 @@ function RegistrationFormPreview({
         <PreviewField label="Teléfono (10 dígitos)" placeholder="(993) 342-5422" />
         <PreviewField label="Email" placeholder="juan@email.com" />
 
-        {askBirthday && <PreviewField label="Fecha de nacimiento" placeholder="Día / Mes" />}
+        {askBirthday && <PreviewField label="Fecha de nacimiento" placeholder="Día / Mes / Año" />}
         {askGender && (
           <div>
             <p className="mb-1 text-xs font-semibold text-gray-700">Género</p>

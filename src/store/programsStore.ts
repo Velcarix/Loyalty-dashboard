@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import type {
   LoyaltyProgram, LoyaltyPointsConfig, LoyaltyVisitsConfig, LoyaltyReward,
   LoyaltyCustomer, LoyaltyTransaction, AnalyticsData, Anomaly,
+  LoyaltyNotification, AudienceFilter, NotificationChannel,
 } from '@/types/loyalty'
 
 export interface ProgramFull {
@@ -24,6 +25,8 @@ interface ProgramsState {
   isLoadingAnalytics: boolean
   anomalies: Anomaly[]
   isLoadingAnomalies: boolean
+  notifications: LoyaltyNotification[]
+  isLoadingNotifications: boolean
 
   loadPrograms: () => Promise<void>
   getProgram: (programId: string) => ProgramFull | undefined
@@ -50,6 +53,13 @@ interface ProgramsState {
 
   loadAnalytics: (programId: string, startDate: string, endDate: string) => Promise<void>
   loadAnomalies: (programId: string) => Promise<void>
+
+  loadNotifications: (programId: string) => Promise<void>
+  previewAudience: (programId: string, targetSegment?: AudienceFilter['segment'], targetFilters?: AudienceFilter) => Promise<number>
+  sendNotification: (programId: string, body: {
+    title: string; message: string; channels: NotificationChannel[]
+    targetSegment?: AudienceFilter['segment']; targetFilters?: AudienceFilter
+  }) => Promise<LoyaltyNotification>
 }
 
 export const useProgramsStore = create<ProgramsState>((set, get) => ({
@@ -65,6 +75,8 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   isLoadingAnalytics: false,
   anomalies: [],
   isLoadingAnomalies: false,
+  notifications: [],
+  isLoadingNotifications: false,
 
   loadPrograms: async () => {
     set({ isLoading: true })
@@ -203,5 +215,26 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     } catch {
       set({ anomalies: [], isLoadingAnomalies: false })
     }
+  },
+
+  loadNotifications: async (programId) => {
+    set({ isLoadingNotifications: true })
+    try {
+      const notifications = await api.get<LoyaltyNotification[]>(`/api/v1/loyalty/programs/${programId}/notifications?limit=50`)
+      set({ notifications: notifications ?? [], isLoadingNotifications: false })
+    } catch {
+      set({ notifications: [], isLoadingNotifications: false })
+    }
+  },
+
+  previewAudience: async (programId, targetSegment, targetFilters) => {
+    const res = await api.post<{ count: number }>(`/api/v1/loyalty/programs/${programId}/notifications/preview`, { targetSegment, targetFilters })
+    return res.count
+  },
+
+  sendNotification: async (programId, body) => {
+    const notification = await api.post<LoyaltyNotification>(`/api/v1/loyalty/programs/${programId}/notifications`, body)
+    set(s => ({ notifications: [notification, ...s.notifications] }))
+    return notification
   },
 }))

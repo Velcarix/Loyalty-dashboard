@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
-import type { LoyaltyReward, RewardType } from '@/types/loyalty'
+import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
+import type { AudienceFilter, LoyaltyReward, RewardType } from '@/types/loyalty'
 
 const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
   { key: 'free_product', label: 'Producto/servicio gratis', hint: 'Ej: corte de cabello gratis' },
@@ -43,17 +44,23 @@ function buildConfig(form: Form): Record<string, unknown> {
 
 export function Rewards() {
   const { programId } = useParams<{ programId: string }>()
-  const { rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward } = useProgramsStore()
+  const { rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward, getProgram } = useProgramsStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<LoyaltyReward | null>(null)
   const [form, setForm] = useState<Form>(FORM_DEFAULTS)
   const [saving, setSaving] = useState(false)
+  const [restricted, setRestricted] = useState(false)
+  const [eligibility, setEligibility] = useState<AudienceFilter>({})
+
+  const customFieldOptions = (programId ? getProgram(programId)?.program.customFields : null) ?? []
 
   useEffect(() => { if (programId) void loadRewards(programId) }, [programId])
 
   function openCreate() {
     setEditing(null)
     setForm(FORM_DEFAULTS)
+    setRestricted(false)
+    setEligibility({})
     setShowForm(true)
   }
 
@@ -66,6 +73,8 @@ export function Rewards() {
       discountCents: c.discountCents ? String(Number(c.discountCents) / 100) : '',
       buyQty: String(c.buyQty ?? '2'), getQty: String(c.getQty ?? '1'), bonusPoints: String(c.bonusPoints ?? ''),
     })
+    setRestricted(!!r.eligibility)
+    setEligibility(r.eligibility ?? {})
     setShowForm(true)
   }
 
@@ -73,7 +82,11 @@ export function Rewards() {
     if (!programId) return
     setSaving(true)
     try {
-      const body = { type: form.type, name: form.name.trim(), description: form.description.trim(), pointsRequired: parseInt(form.pointsRequired), config: buildConfig(form) }
+      const body = {
+        type: form.type, name: form.name.trim(), description: form.description.trim(),
+        pointsRequired: parseInt(form.pointsRequired) || 0, config: buildConfig(form),
+        eligibility: restricted ? eligibility : null,
+      }
       if (editing) await updateReward(programId, editing.id, body)
       else await createReward(programId, body)
       setShowForm(false)
@@ -105,7 +118,7 @@ export function Rewards() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nombre"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-            <input value={form.pointsRequired} onChange={e => setForm(f => ({ ...f, pointsRequired: e.target.value }))} type="number" placeholder="Puntos requeridos"
+            <input value={form.pointsRequired} onChange={e => setForm(f => ({ ...f, pointsRequired: e.target.value }))} type="number" min={0} placeholder="Puntos requeridos (0 = gratis si califica)"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
@@ -134,6 +147,22 @@ export function Rewards() {
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             )}
           </div>
+
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <label className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-700">Restringir a cierto público</span>
+              <input type="checkbox" checked={restricted} onChange={e => setRestricted(e.target.checked)} className="h-4 w-4 accent-primary" />
+            </label>
+            {restricted ? (
+              <>
+                <p className="mb-2 text-xs text-gray-500">Solo los clientes que califiquen podrán canjearla — se valida al escanear su QR.</p>
+                <AudienceFilterEditor value={eligibility} onChange={setEligibility} customFieldOptions={customFieldOptions} />
+              </>
+            ) : (
+              <p className="text-xs text-gray-400">Abierta a cualquier cliente con los puntos suficientes.</p>
+            )}
+          </div>
+
           <div className="mt-4 flex gap-2">
             <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Cancelar</button>
             <button onClick={handleSave} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
@@ -155,9 +184,12 @@ export function Rewards() {
                 <div>
                   <p className="font-bold text-gray-900">{r.name}{!r.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactiva</span>}</p>
                   <p className="text-xs text-gray-500">{r.description}</p>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} pts</span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPES.find(t => t.key === r.type)?.label}</span>
+                    {r.eligibility && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">Público restringido</span>
+                    )}
                   </div>
                 </div>
               </div>

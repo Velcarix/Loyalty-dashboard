@@ -67,6 +67,14 @@ export interface LoyaltyVisitsConfig {
 
 export type RewardType = 'free_product' | 'pct_discount' | 'fixed_discount' | 'bxgy' | 'bonus_points' | 'vip_exclusive'
 
+export interface AudienceFilter {
+  segment?: 'active' | 'at_risk' | 'lapsed' | 'vip'
+  gender?: 'male' | 'female'
+  minAge?: number
+  maxAge?: number
+  customFieldFilters?: { fieldId: string; value: string }[]
+}
+
 export interface LoyaltyReward {
   id: string
   programId: string
@@ -74,6 +82,7 @@ export interface LoyaltyReward {
   name: string
   description: string
   imageUrl?: string | null
+  // 0 = gratis para quien califique según `eligibility` (verificado con QR, sin puntos)
   pointsRequired: number
   isActive: boolean
   usageCount: number
@@ -83,6 +92,8 @@ export interface LoyaltyReward {
   startsAt: string | null
   expiresAt: string | null
   config: Record<string, unknown>
+  // Quién puede canjearla — null/ausente = abierta a cualquiera
+  eligibility?: AudienceFilter | null
 }
 
 export interface LoyaltyCustomer {
@@ -91,6 +102,7 @@ export interface LoyaltyCustomer {
   name: string
   phone: string
   email: string | null
+  // ISO "YYYY-MM-DD" (fecha completa, con año)
   birthdayDate?: string | null
   gender?: string | null
   customFieldValues?: Record<string, string> | null
@@ -102,6 +114,27 @@ export interface LoyaltyCustomer {
   segment: 'active' | 'at_risk' | 'lapsed' | 'vip'
   createdAt: string
   lastActivityAt: string | null
+}
+
+export type NotificationChannel = 'push' | 'sms' | 'email'
+export type NotificationStatus = 'scheduled' | 'sending' | 'sent' | 'failed'
+
+export interface LoyaltyNotification {
+  id: string
+  programId: string
+  trigger: string
+  channels: NotificationChannel[]
+  title: string
+  message: string
+  targetSegment: 'active' | 'at_risk' | 'lapsed' | 'vip' | null
+  targetFilters: AudienceFilter | null
+  targetCustomerIds: string[]
+  scheduledFor: string | null
+  sentAt: string | null
+  status: NotificationStatus
+  recipientCount: number
+  deliveredCount: number
+  createdAt: string
 }
 
 export interface LoyaltyTransaction {

@@ -12,6 +12,7 @@ import { Rewards } from '@/pages/Rewards'
 import { Transactions } from '@/pages/Transactions'
 import { Anomalies } from '@/pages/Anomalies'
 import { RegistrationFields } from '@/pages/RegistrationFields'
+import { Notifications } from '@/pages/Notifications'
 import { Settings } from '@/pages/Settings'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -38,6 +39,7 @@ export default function App() {
               <Route path="transacciones" element={<Transactions />} />
               <Route path="anomalias" element={<Anomalies />} />
               <Route path="datos-a-solicitar" element={<RegistrationFields />} />
+              <Route path="notificaciones" element={<Notifications />} />
             </Route>
             <Route path="/ajustes" element={<Settings />} />
           </Route>
