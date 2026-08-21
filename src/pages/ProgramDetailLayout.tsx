@@ -9,6 +9,7 @@ const tabs = [
   { to: 'rewards', label: 'Recompensas' },
   { to: 'transacciones', label: 'Transacciones' },
   { to: 'anomalias', label: 'Anomalías' },
+  { to: 'datos-a-solicitar', label: 'Datos a solicitar' },
 ]
 
 export function ProgramDetailLayout() {

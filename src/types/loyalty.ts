@@ -8,6 +8,12 @@ export interface LoyaltyBusinessInfo {
   socials?: { instagram?: string; facebook?: string }
 }
 
+export interface CustomRegistrationField {
+  id: string
+  label: string
+  required: boolean
+}
+
 export interface LoyaltyProgram {
   id: string
   businessId: string
@@ -22,6 +28,9 @@ export interface LoyaltyProgram {
   welcomeMessage: string | null
   saldoLabel: string | null
   businessInfo: LoyaltyBusinessInfo | null
+  askBirthday: boolean
+  askGender: boolean
+  customFields: CustomRegistrationField[] | null
   createdAt: string
   updatedAt: string
 }
@@ -82,6 +91,9 @@ export interface LoyaltyCustomer {
   name: string
   phone: string
   email: string | null
+  birthdayDate?: string | null
+  gender?: string | null
+  customFieldValues?: Record<string, string> | null
   pointsBalance: number
   visitsCount: number
   totalEarnedPoints: number
