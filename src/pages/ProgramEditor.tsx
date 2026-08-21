@@ -23,6 +23,22 @@ const LOGO_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png'], 
 const BANNER_RULES: ImageRules = { maxBytes: 2 * 1024 * 1024, formats: ['image/png', 'image/jpeg'], aspect: { width: 1125, height: 432, tolerance: 0.15 } }
 const STAMP_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png', 'image/jpeg'], minWidth: 64, minHeight: 64 }
 
+// Firma binaria real de los primeros bytes — no basta con file.type (lo infiere
+// el navegador de la extensión) ni con el nombre del archivo: alguien puede
+// renombrar cualquier cosa a "logo.png".
+async function detectImageFormat(file: File): Promise<'image/png' | 'image/jpeg' | null> {
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+  if (head.length >= 8
+    && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4E && head[3] === 0x47
+    && head[4] === 0x0D && head[5] === 0x0A && head[6] === 0x1A && head[7] === 0x0A) {
+    return 'image/png'
+  }
+  if (head.length >= 3 && head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF) {
+    return 'image/jpeg'
+  }
+  return null
+}
+
 async function readImageInfo(file: File): Promise<{ width: number; height: number; hasAlpha: boolean }> {
   const bitmap = await createImageBitmap(file)
   try {
@@ -44,8 +60,13 @@ async function readImageInfo(file: File): Promise<{ width: number; height: numbe
 }
 
 async function validateImage(file: File, rules: ImageRules): Promise<string | null> {
-  if (!rules.formats.includes(file.type)) {
-    return `Formato no soportado — usa ${rules.formats.map(f => f.replace('image/', '').toUpperCase()).join(' o ')}`
+  const allowedLabel = rules.formats.map(f => f.replace('image/', '').toUpperCase()).join(' o ')
+  const detectedFormat = await detectImageFormat(file)
+  if (!detectedFormat) {
+    return `El archivo no es un ${allowedLabel} válido — su contenido no coincide con ninguno de esos formatos, aunque el nombre lo diga`
+  }
+  if (!rules.formats.includes(detectedFormat)) {
+    return `El archivo es en realidad ${detectedFormat === 'image/png' ? 'PNG' : 'JPG'}, pero aquí se necesita ${allowedLabel}`
   }
   if (file.size > rules.maxBytes) {
     return `El archivo pesa más de ${(rules.maxBytes / 1024 / 1024).toFixed(0)} MB`
