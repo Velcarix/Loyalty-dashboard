@@ -8,6 +8,67 @@ import type { LoyaltyPointsConfig, LoyaltyVisitsConfig, LoyaltyProgram, LoyaltyB
 
 const PRESET_COLORS = ['#2563EB', '#1D4ED8', '#7C3AED', '#DB2777', '#DC2626', '#D97706', '#16A34A', '#0891B2', '#374151']
 
+// Mismas reglas que backend/src/services/image-upload.service.ts — se validan
+// aquí primero para que el usuario vea el error de inmediato, no tras subir.
+interface ImageRules {
+  maxBytes: number
+  formats: string[]
+  minWidth?: number
+  minHeight?: number
+  requireAlpha?: boolean
+  aspect?: { width: number; height: number; tolerance: number }
+}
+
+const LOGO_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png'], minWidth: 480, minHeight: 150, requireAlpha: true }
+const BANNER_RULES: ImageRules = { maxBytes: 2 * 1024 * 1024, formats: ['image/png', 'image/jpeg'], aspect: { width: 1125, height: 432, tolerance: 0.15 } }
+const STAMP_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png', 'image/jpeg'], minWidth: 64, minHeight: 64 }
+
+async function readImageInfo(file: File): Promise<{ width: number; height: number; hasAlpha: boolean }> {
+  const bitmap = await createImageBitmap(file)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return { width: bitmap.width, height: bitmap.height, hasAlpha: true }
+    ctx.drawImage(bitmap, 0, 0)
+    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
+    let hasAlpha = false
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) { hasAlpha = true; break }
+    }
+    return { width: bitmap.width, height: bitmap.height, hasAlpha }
+  } finally {
+    bitmap.close()
+  }
+}
+
+async function validateImage(file: File, rules: ImageRules): Promise<string | null> {
+  if (!rules.formats.includes(file.type)) {
+    return `Formato no soportado — usa ${rules.formats.map(f => f.replace('image/', '').toUpperCase()).join(' o ')}`
+  }
+  if (file.size > rules.maxBytes) {
+    return `El archivo pesa más de ${(rules.maxBytes / 1024 / 1024).toFixed(0)} MB`
+  }
+  let info: { width: number; height: number; hasAlpha: boolean }
+  try {
+    info = await readImageInfo(file)
+  } catch {
+    return 'No se pudo leer la imagen — intenta con otro archivo'
+  }
+  if (rules.minWidth && info.width < rules.minWidth) return `Debe medir al menos ${rules.minWidth}px de ancho (subiste ${info.width}px)`
+  if (rules.minHeight && info.height < rules.minHeight) return `Debe medir al menos ${rules.minHeight}px de alto (subiste ${info.height}px)`
+  if (rules.requireAlpha && !info.hasAlpha) return 'Debe tener transparencia (canal alfa) — el fondo no puede ser sólido'
+  if (rules.aspect) {
+    const targetRatio = rules.aspect.width / rules.aspect.height
+    const actualRatio = info.height > 0 ? info.width / info.height : 0
+    if (Math.abs(actualRatio - targetRatio) / targetRatio > rules.aspect.tolerance) {
+      return `La proporción debe ser cercana a ${rules.aspect.width}×${rules.aspect.height} (subiste ${info.width}×${info.height})`
+    }
+  }
+  return null
+}
+
 interface Form {
   type: 'points' | 'visits'
   programName: string
@@ -68,11 +129,12 @@ interface PendingFile {
 }
 
 function ImagePickerField({
-  label, hint, required, previewUrl, uploading, error, onPick,
+  label, hint, required, accept = 'image/png,image/jpeg', previewUrl, uploading, error, onPick,
 }: {
   label: string
   hint: string
   required?: boolean
+  accept?: string
   previewUrl: string | null
   uploading: boolean
   error: string | null
@@ -93,11 +155,11 @@ function ImagePickerField({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-gray-900">{previewUrl ? 'Cambiar imagen' : 'Subir imagen'}</p>
-          <p className="truncate text-xs text-gray-400">{hint}</p>
+          <p className="text-xs text-gray-400">{hint}</p>
         </div>
         <input
           type="file"
-          accept="image/png,image/jpeg"
+          accept={accept}
           className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = '' }}
         />
@@ -177,6 +239,13 @@ export function ProgramEditor() {
     const setFieldError = kind === 'logo' ? setLogoError : setBannerError
     const setPending = kind === 'logo' ? setLogoPending : setBannerPending
     setFieldError(null)
+
+    const validationError = await validateImage(file, kind === 'logo' ? LOGO_RULES : BANNER_RULES)
+    if (validationError) {
+      setFieldError(validationError)
+      return
+    }
+
     const previewUrl = URL.createObjectURL(file)
 
     if (!isEditing || !programId) {
@@ -203,6 +272,13 @@ export function ProgramEditor() {
   // usa su propio endpoint en vez de handlePickImage.
   async function handlePickStamp(file: File) {
     setStampError(null)
+
+    const validationError = await validateImage(file, STAMP_RULES)
+    if (validationError) {
+      setStampError(validationError)
+      return
+    }
+
     const previewUrl = URL.createObjectURL(file)
 
     if (!isEditing || !programId) {
@@ -336,17 +412,24 @@ export function ProgramEditor() {
           ...programData,
           config: buildConfig(),
         })
+        const uploadWarnings: string[] = []
         if (logoPending) {
           const body = new FormData(); body.append('file', logoPending.file)
-          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/logo`, body).catch(() => {})
+          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/logo`, body)
+            .catch((err: any) => uploadWarnings.push(`Logo: ${err?.message ?? 'no se pudo subir'}`))
         }
         if (bannerPending) {
           const body = new FormData(); body.append('file', bannerPending.file)
-          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/banner`, body).catch(() => {})
+          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/banner`, body)
+            .catch((err: any) => uploadWarnings.push(`Banner: ${err?.message ?? 'no se pudo subir'}`))
         }
         if (stampPending) {
           const body = new FormData(); body.append('file', stampPending.file)
-          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/config/visits/stamp`, body).catch(() => {})
+          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/config/visits/stamp`, body)
+            .catch((err: any) => uploadWarnings.push(`Sello: ${err?.message ?? 'no se pudo subir'}`))
+        }
+        if (uploadWarnings.length) {
+          alert(`El programa se creó, pero hubo un problema al subir:\n\n${uploadWarnings.join('\n')}\n\nPuedes volver a subir la imagen desde Editar.`)
         }
         navigate(`/programas/${created.id}`)
       }
@@ -405,7 +488,8 @@ export function ProgramEditor() {
           <ImagePickerField
             label="Logo"
             required
-            hint="PNG con transparencia, mín. 480×150px, máx. 1 MB"
+            accept="image/png"
+            hint="PNG con transparencia (fondo sin color sólido), mín. 480×150px, máx. 1 MB"
             previewUrl={logoPending?.previewUrl ?? (form.logoUrl || null)}
             uploading={uploadingLogo}
             error={logoError}
@@ -413,7 +497,8 @@ export function ProgramEditor() {
           />
           <ImagePickerField
             label="Banner (opcional)"
-            hint="PNG o JPG, proporción ~1125×432px, máx. 2 MB"
+            accept="image/png,image/jpeg"
+            hint="PNG o JPG, proporción cercana a 1125×432px (±15%), máx. 2 MB"
             previewUrl={bannerPending?.previewUrl ?? (form.bannerUrl || null)}
             uploading={uploadingBanner}
             error={bannerError}
@@ -516,7 +601,8 @@ export function ProgramEditor() {
               {form.visitsVisualStyle === 'stamp' && (
                 <ImagePickerField
                   label="Imagen del sello"
-                  hint="PNG cuadrado o circular, fondo transparente, máx. 1 MB"
+                  accept="image/png,image/jpeg"
+                  hint="PNG o JPG, mín. 64×64px, máx. 1 MB"
                   previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)}
                   uploading={uploadingStamp}
                   error={stampError}
