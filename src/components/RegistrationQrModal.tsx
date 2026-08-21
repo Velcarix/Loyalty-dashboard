@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
+import { Icon } from '@/components/Icon'
 import { getTextColorForBg } from '@/lib/color'
 import type { LoyaltyProgram } from '@/types/loyalty'
 
@@ -67,7 +68,9 @@ export function RegistrationQrModal({ program, onClose }: Props) {
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-900">QR de registro</h3>
-          <button onClick={onClose} className="text-2xl leading-none text-gray-400">×</button>
+          <button onClick={onClose} className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700" aria-label="Cerrar">
+            <Icon name="x" size={20} />
+          </button>
         </div>
 
         <div
@@ -89,7 +92,7 @@ export function RegistrationQrModal({ program, onClose }: Props) {
 
         <div className="flex gap-2">
           <button onClick={handleCopy} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700">
-            {copied ? 'Copiado ✓' : 'Copiar link'}
+            {copied ? <span className="inline-flex items-center gap-1"><Icon name="check" size={16} />Copiado</span> : 'Copiar link'}
           </button>
           <button onClick={handleDownload} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700">
             Descargar

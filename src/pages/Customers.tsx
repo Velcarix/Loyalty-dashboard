@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
 
 export function Customers() {
@@ -43,7 +44,17 @@ export function Customers() {
                     <Link to={`/programas/${programId}/clientes/${c.id}`} className="font-semibold text-gray-900 hover:text-primary">{c.name}</Link>
                     <p className="text-xs text-gray-400">{c.phone}</p>
                   </td>
-                  <td className="px-4 py-3">{c.pointsBalance} pts{c.hasPendingReward && ' · 🎁'}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1">
+                      {c.pointsBalance} pts
+                      {c.hasPendingReward && (
+                        <span className="inline-flex text-amber-600">
+                          <Icon name="gift" size={16} />
+                          <span className="sr-only">Premio pendiente</span>
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 capitalize">{c.segment.replace('_', ' ')}</td>
                   <td className="px-4 py-3 text-gray-500">{c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleDateString('es-MX') : 'Sin actividad'}</td>
                 </tr>

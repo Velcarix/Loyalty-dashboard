@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { RegistrationQrModal } from '@/components/RegistrationQrModal'
+import { Icon } from '@/components/Icon'
 
 const tabs = [
   { to: '', label: 'Dashboard', end: true },
@@ -35,34 +36,37 @@ export function ProgramDetailLayout() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-8 py-8">
-      <Link to="/programas" className="text-sm text-primary">← Programas</Link>
-      <div className="mb-4 mt-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold text-gray-900">{program?.program.programName ?? 'Programa'}</h1>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <Link to="/programas" className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-primary transition hover:text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/30"><Icon name="arrow-left" size={16} /> Programas</Link>
+      <div className="mb-5 mt-4 flex flex-col gap-4 border-b border-slate-200 pb-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-3xl font-bold tracking-tight text-slate-950">{program?.program.programName ?? 'Programa'}</h1>
           {program && !program.program.isActive && (
-            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold uppercase text-gray-500">Pausado</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-slate-500">Pausado</span>
           )}
+          </div>
+          <p className="mt-2 text-sm text-slate-500">Gestiona rendimiento, clientes, recompensas y la distribución de tu programa.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {program && (
             <button
               onClick={handleToggleActive}
               disabled={togglingActive}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-600 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {togglingActive ? '…' : program.program.isActive ? 'Pausar' : 'Activar'}
+              <Icon name={program.program.isActive ? 'pause' : 'play'} size={16} /> {togglingActive ? 'Actualizando…' : program.program.isActive ? 'Pausar' : 'Activar'}
             </button>
           )}
           <button
             onClick={() => setQrVisible(true)}
             disabled={!program}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-600 disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            QR de registro
+            <Icon name="qrcode" size={16} /> QR de registro
           </button>
-          <Link to={`/programas/${programId}/editar`} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-600">
-            Editar
+          <Link to={`/programas/${programId}/editar`} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition hover:bg-primary-dark focus:outline-none focus:ring-4 focus:ring-primary/30">
+            <Icon name="edit" size={16} /> Editar
           </Link>
         </div>
       </div>
@@ -71,20 +75,22 @@ export function ProgramDetailLayout() {
         <RegistrationQrModal program={program.program} onClose={() => setQrVisible(false)} />
       )}
 
-      <div className="mb-6 flex gap-1 border-b border-gray-200">
+      <nav aria-label="Secciones del programa" className="mb-6 overflow-x-auto border-b border-slate-200">
+      <div className="flex min-w-max gap-1">
         {tabs.map(tab => (
           <NavLink
             key={tab.label}
             to={tab.to || '.'}
             end={tab.end}
             className={({ isActive }) =>
-              `border-b-2 px-4 py-2 text-sm font-semibold ${isActive ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700'}`
+              `border-b-2 px-4 py-3 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${isActive ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-800'}`
             }
           >
             {tab.label}
           </NavLink>
         ))}
       </div>
+      </nav>
 
       <Outlet />
     </div>

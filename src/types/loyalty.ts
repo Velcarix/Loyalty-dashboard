@@ -1,3 +1,5 @@
+import type { LoyaltyPassDesignConfig } from '@/lib/passDesign'
+
 export type ProgramType = 'points' | 'visits'
 
 export interface LoyaltyBusinessInfo {
@@ -6,6 +8,8 @@ export interface LoyaltyBusinessInfo {
   address?: string
   website?: string
   socials?: { instagram?: string; facebook?: string }
+  /** Visual pass options persisted with the merchant's public business data. */
+  design?: LoyaltyPassDesignConfig
 }
 
 export interface CustomRegistrationField {

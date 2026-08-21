@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { formatCurrency } from '@/lib/color'
+import { Icon, type IconName } from '@/components/Icon'
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({ label, value, icon, tone, sub }: { label: string; value: string | number; icon: IconName; tone: string; sub?: string }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone}`}><Icon name={icon} size={16} /></span>
+      </div>
+      <p className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
+      {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </div>
   )
 }
@@ -35,32 +39,43 @@ export function ProgramDashboard() {
 
   return (
     <div>
-      <div className="mb-5 flex gap-2">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-slate-950">Pulso del programa</p>
+          <p className="mt-1 text-sm text-slate-500">Mide la actividad de tus clientes y detecta oportunidades de regreso.</p>
+        </div>
+        <div aria-label="Periodo" className="flex w-fit rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
         {PERIODS.map(p => (
           <button
             key={p.key}
             onClick={() => setPeriod(p.key)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${period === p.key ? 'bg-primary text-white' : 'bg-white text-gray-600 shadow-sm'}`}
+            aria-pressed={period === p.key}
+            className={`rounded-lg px-3 py-2 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${period === p.key ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             {p.label}
           </button>
         ))}
+        </div>
       </div>
 
       {isLoadingAnalytics ? (
-        <div className="py-16 text-center text-sm text-gray-400">Cargando…</div>
+        <div className="rounded-3xl border border-slate-200 bg-white py-16 text-center text-sm text-slate-400">Actualizando métricas…</div>
       ) : !analytics ? (
-        <div className="py-16 text-center text-sm text-gray-400">Sin datos todavía</div>
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white py-16 text-center">
+          <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon name="chart" size={23} /></span>
+          <p className="text-sm font-bold text-slate-800">Aún no hay actividad para este periodo</p>
+          <p className="mt-1 text-sm text-slate-500">Cuando tus clientes acumulen o canjeen, la verás aquí.</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard label="Clientes totales" value={analytics.totalCustomers} />
-          <StatCard label="Nuevos en el período" value={analytics.newCustomersInPeriod} />
-          <StatCard label="Activos" value={analytics.activeCustomers} />
-          <StatCard label="En riesgo" value={analytics.atRiskCustomers} />
-          <StatCard label="Inactivos" value={analytics.lapsedCustomers} />
-          <StatCard label="VIP" value={analytics.vipCustomers} />
-          <StatCard label="Puntos emitidos" value={analytics.totalPointsIssued} />
-          <StatCard label="Descuentos aplicados" value={formatCurrency(analytics.totalDiscountCents)} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Clientes totales" value={analytics.totalCustomers} icon="user" tone="bg-blue-50 text-primary" />
+          <StatCard label="Nuevos" value={analytics.newCustomersInPeriod} icon="plus" tone="bg-teal-50 text-teal-700" />
+          <StatCard label="Activos" value={analytics.activeCustomers} icon="check" tone="bg-emerald-50 text-emerald-700" />
+          <StatCard label="En riesgo" value={analytics.atRiskCustomers} icon="shield" tone="bg-amber-50 text-amber-700" />
+          <StatCard label="Inactivos" value={analytics.lapsedCustomers} icon="pause" tone="bg-slate-100 text-slate-600" />
+          <StatCard label="VIP" value={analytics.vipCustomers} icon="sparkles" tone="bg-violet-50 text-violet-700" />
+          <StatCard label="Puntos emitidos" value={analytics.totalPointsIssued} icon="gift" tone="bg-rose-50 text-rose-700" />
+          <StatCard label="Beneficios aplicados" value={formatCurrency(analytics.totalDiscountCents)} icon="chart" tone="bg-cyan-50 text-cyan-700" />
         </div>
       )}
     </div>

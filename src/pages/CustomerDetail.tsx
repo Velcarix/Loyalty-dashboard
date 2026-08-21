@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
 import { useAuthStore } from '@/store/authStore'
 
@@ -125,8 +126,9 @@ export function CustomerDetail() {
           )}
 
           {customer.hasPendingReward && (
-            <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-              🎁 Premio pendiente: {customer.pendingRewardDescription}
+            <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+              <Icon name="gift" size={16} className="mt-0.5 shrink-0" />
+              <span>Premio pendiente: {customer.pendingRewardDescription}</span>
             </div>
           )}
 

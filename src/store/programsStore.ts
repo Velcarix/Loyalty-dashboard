@@ -103,26 +103,28 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   createProgram: async (data) => {
     const { config, ...programData } = data
     const program = await api.post<LoyaltyProgram>('/api/v1/loyalty/programs', programData)
+    let savedConfig: LoyaltyPointsConfig | LoyaltyVisitsConfig
     if (program.type === 'points') {
-      await api.put(`/api/v1/loyalty/programs/${program.id}/config/points`, config)
+      savedConfig = await api.put<LoyaltyPointsConfig>(`/api/v1/loyalty/programs/${program.id}/config/points`, config)
     } else {
-      await api.put(`/api/v1/loyalty/programs/${program.id}/config/visits`, config)
+      savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${program.id}/config/visits`, config)
     }
-    set(s => ({ programs: [{ program, config: config as any }, ...s.programs] }))
+    set(s => ({ programs: [{ program, config: savedConfig }, ...s.programs] }))
     return program
   },
 
   updateProgram: async (programId, data, config) => {
-    await api.put(`/api/v1/loyalty/programs/${programId}`, data)
+    const savedProgram = await api.put<LoyaltyProgram>(`/api/v1/loyalty/programs/${programId}`, data)
+    let savedConfig: LoyaltyPointsConfig | LoyaltyVisitsConfig | undefined
     if (config) {
       const existing = get().getProgram(programId)
       const type = existing?.program.type ?? 'points'
-      if (type === 'points') await api.put(`/api/v1/loyalty/programs/${programId}/config/points`, config)
-      else await api.put(`/api/v1/loyalty/programs/${programId}/config/visits`, config)
+      if (type === 'points') savedConfig = await api.put<LoyaltyPointsConfig>(`/api/v1/loyalty/programs/${programId}/config/points`, config)
+      else savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${programId}/config/visits`, config)
     }
     set(s => ({
       programs: s.programs.map(p => p.program.id === programId
-        ? { ...p, program: { ...p.program, ...data }, config: config ? (config as any) : p.config }
+        ? { ...p, program: savedProgram, config: savedConfig ?? p.config }
         : p),
     }))
   },

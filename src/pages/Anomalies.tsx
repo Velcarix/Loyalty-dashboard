@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
 
 export function Anomalies() {
@@ -15,7 +16,7 @@ export function Anomalies() {
         <p className="py-10 text-center text-sm text-gray-400">Cargando…</p>
       ) : anomalies.length === 0 ? (
         <div className="rounded-2xl bg-white py-10 text-center shadow-sm">
-          <p className="mb-1 text-3xl">✅</p>
+          <div className="mb-2 flex justify-center text-green-600"><Icon name="check" size={32} /></div>
           <p className="text-sm text-gray-500">Sin anomalías detectadas</p>
         </div>
       ) : (
