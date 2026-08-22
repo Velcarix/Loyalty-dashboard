@@ -111,10 +111,6 @@ export function Notifications() {
               <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
               Email (a quien dio su correo y aceptó recibir novedades)
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-400">
-              <input type="checkbox" disabled />
-              SMS (próximamente)
-            </label>
           </div>
         </div>
 
