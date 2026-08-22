@@ -67,6 +67,10 @@ export interface LoyaltyVisitsConfig {
   // el sello relleno al registrar una visita.
   visualStyle?: 'number' | 'stamp'
   stampImageUrl?: string | null
+  // Imagen mostrada en las casillas de visita aún no ganadas (ej. el ícono
+  // apagado/gris de la marca). Opcional: sin ella, la casilla vacía usa el
+  // borde punteado de stampEmptyColor.
+  stampEmptyImageUrl?: string | null
 }
 
 export type RewardType = 'free_product' | 'pct_discount' | 'fixed_discount' | 'bxgy' | 'bonus_points' | 'vip_exclusive'

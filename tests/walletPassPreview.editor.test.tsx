@@ -5,7 +5,10 @@ import { WalletPassPreview } from '@/components/WalletPassPreview'
 
 const mountedRoots: Root[] = []
 
-function renderEditablePreview(selectedZone?: 'background' | 'identity' | 'progress' | 'stamps' | 'reward') {
+function renderEditablePreview(
+  selectedZone?: 'background' | 'identity' | 'progress' | 'stamps' | 'reward',
+  configOverrides: Partial<{ stampImageUrl: string; stampEmptyImageUrl: string }> = {},
+) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -42,6 +45,7 @@ function renderEditablePreview(selectedZone?: 'background' | 'identity' | 'progr
           rewardDescription: 'Helado gratis',
           visualStyle: 'stamp',
           stampImageUrl: 'https://cdn.example.test/stamp.png',
+          ...configOverrides,
         }}
       />,
     )
@@ -110,5 +114,26 @@ describe('WalletPassPreview direct-manipulation editor', () => {
     expect(container.querySelector('[aria-label="Código QR protegido; no se puede editar"]')).not.toBeNull()
     expect(container.querySelector('button[aria-label*="QR"]')).toBeNull()
     expect(container.textContent).toContain('QR y datos reales')
+  })
+
+  it('renders a custom image on unfilled stamps when stampEmptyImageUrl is set', () => {
+    const { container } = renderEditablePreview(undefined, {
+      stampEmptyImageUrl: 'https://cdn.example.test/stamp-empty.png',
+    })
+
+    // sampleVisits defaults to 3, so stamp 3 is the first unfilled slot.
+    const filledStamp = container.querySelector('[data-pass-stamp="0"] img')
+    const emptyStamp = container.querySelector('[data-pass-stamp="3"] img')
+
+    expect(filledStamp?.getAttribute('src')).toBe('https://cdn.example.test/stamp.png')
+    expect(emptyStamp?.getAttribute('src')).toBe('https://cdn.example.test/stamp-empty.png')
+  })
+
+  it('falls back to the dashed border when no stampEmptyImageUrl is set', () => {
+    const { container } = renderEditablePreview()
+
+    const emptyStamp = container.querySelector('[data-pass-stamp="3"]')
+
+    expect(emptyStamp?.querySelector('img')).toBeNull()
   })
 })

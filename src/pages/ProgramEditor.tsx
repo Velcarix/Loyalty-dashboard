@@ -128,6 +128,7 @@ interface Form {
   maxVisitsPerDay: string
   visitsVisualStyle: 'number' | 'stamp'
   stampImageUrl: string
+  stampEmptyImageUrl: string
   // Puntos sin POS vinculado — timestamp de cuando el comerciante aceptó el
   // riesgo de fraude (nadie más que el propio empleado valida el monto tecleado).
   pointsRiskAcceptedAt: string | null
@@ -160,6 +161,7 @@ const DEFAULTS: Form = {
   maxVisitsPerDay: '1',
   visitsVisualStyle: 'number',
   stampImageUrl: '',
+  stampEmptyImageUrl: '',
   pointsRiskAcceptedAt: null,
 }
 
@@ -227,12 +229,15 @@ export function ProgramEditor() {
   const [logoPending, setLogoPending] = useState<PendingFile | null>(null)
   const [bannerPending, setBannerPending] = useState<PendingFile | null>(null)
   const [stampPending, setStampPending] = useState<PendingFile | null>(null)
+  const [stampEmptyPending, setStampEmptyPending] = useState<PendingFile | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingStamp, setUploadingStamp] = useState(false)
+  const [uploadingStampEmpty, setUploadingStampEmpty] = useState(false)
   const [logoError, setLogoError] = useState<string | null>(null)
   const [bannerError, setBannerError] = useState<string | null>(null)
   const [stampError, setStampError] = useState<string | null>(null)
+  const [stampEmptyError, setStampEmptyError] = useState<string | null>(null)
 
   async function handlePickImage(kind: 'logo' | 'banner', file: File) {
     const setUploading = kind === 'logo' ? setUploadingLogo : setUploadingBanner
@@ -296,6 +301,37 @@ export function ProgramEditor() {
       setStampError(err instanceof Error ? err.message : 'No se pudo subir la imagen del sello')
     } finally {
       setUploadingStamp(false)
+    }
+  }
+
+  // Imagen del sello vacío: mismo patrón que handlePickStamp, pero para la
+  // casilla de una visita aún no ganada.
+  async function handlePickStampEmpty(file: File) {
+    setStampEmptyError(null)
+
+    const validationError = await validateImage(file, STAMP_RULES)
+    if (validationError) {
+      setStampEmptyError(validationError)
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+
+    if (!isEditing || !programId) {
+      setStampEmptyPending({ file, previewUrl })
+      return
+    }
+
+    setUploadingStampEmpty(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const updated = await api.uploadFile<{ stampEmptyImageUrl: string }>(`/api/v1/loyalty/programs/${programId}/config/visits/stamp-empty`, body)
+      setForm(f => ({ ...f, stampEmptyImageUrl: updated.stampEmptyImageUrl ?? '' }))
+    } catch (err) {
+      setStampEmptyError(err instanceof Error ? err.message : 'No se pudo subir la imagen del sello vacío')
+    } finally {
+      setUploadingStampEmpty(false)
     }
   }
 
@@ -381,6 +417,7 @@ export function ProgramEditor() {
       maxVisitsPerDay: (pc?.maxVisitsPerDay ?? vc?.maxVisitsPerDay ?? 1).toString(),
       visitsVisualStyle: vc?.visualStyle ?? 'number',
       stampImageUrl: vc?.stampImageUrl ?? '',
+      stampEmptyImageUrl: vc?.stampEmptyImageUrl ?? '',
       pointsRiskAcceptedAt: pc?.noPosRiskAcknowledgedAt ?? null,
     })
   }, [programId, programs])
@@ -478,6 +515,11 @@ export function ProgramEditor() {
           const body = new FormData(); body.append('file', stampPending.file)
           await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/config/visits/stamp`, body)
             .catch((err: any) => uploadWarnings.push(`Sello: ${err?.message ?? 'no se pudo subir'}`))
+        }
+        if (stampEmptyPending) {
+          const body = new FormData(); body.append('file', stampEmptyPending.file)
+          await api.uploadFile(`/api/v1/loyalty/programs/${created.id}/config/visits/stamp-empty`, body)
+            .catch((err: any) => uploadWarnings.push(`Sello vacío: ${err?.message ?? 'no se pudo subir'}`))
         }
         if (uploadWarnings.length) {
           alert(`El programa se creó, pero hubo un problema al subir:\n\n${uploadWarnings.join('\n')}\n\nPuedes volver a subir la imagen desde Editar.`)
@@ -645,7 +687,10 @@ export function ProgramEditor() {
 
                 {selectedAppearanceZone === 'stamps' && (
                   form.type === 'visits' ? <div className="space-y-3">
-                    <ImagePickerField label="Imagen del sello" accept="image/png,image/jpeg" hint="PNG o JPG, mín. 64×64px, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ImagePickerField label="Imagen del sello lleno" accept="image/png,image/jpeg" hint="PNG o JPG, mín. 64×64px, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
+                      <ImagePickerField label="Imagen del sello vacío" accept="image/png,image/jpeg" hint="Opcional. Ícono para la casilla sin ganar" previewUrl={stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null)} uploading={uploadingStampEmpty} error={stampEmptyError} onPick={handlePickStampEmpty} />
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div><p className="mb-1.5 text-xs font-bold text-slate-600">Forma</p><div className="grid grid-cols-2 gap-2">{(['circle', 'rounded'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => updatePassDesign({ stampShape: option })} className={`min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{option === 'circle' ? 'Circular' : 'Redondeado'}</button>)}</div></div>
                       <div className="grid grid-cols-2 gap-2"><label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Lleno</span><input type="color" aria-label="Color de sello lleno" value={passDesign.stampFilledColor} onChange={e => updatePassDesign({ stampFilledColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label><label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Vacío</span><input type="color" aria-label="Color de sello vacío" value={passDesign.stampEmptyColor} onChange={e => updatePassDesign({ stampEmptyColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label></div>
@@ -776,7 +821,12 @@ export function ProgramEditor() {
                     <button type="button" aria-pressed={form.visitsVisualStyle === 'stamp'} onClick={() => handleVisitsVisualStyle('stamp')} className={`rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}><Icon name="check" size={17} className="mb-2 text-primary" /><p className="text-sm font-bold text-slate-800">Sellos</p><p className="mt-1 text-xs text-slate-500">Tarjeta visual personalizable</p></button>
                   </div>
                 </div>
-                {form.visitsVisualStyle === 'stamp' && <ImagePickerField label="Imagen del sello" hint="PNG cuadrado o circular, fondo transparente, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />}
+                {form.visitsVisualStyle === 'stamp' && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ImagePickerField label="Imagen del sello lleno" hint="PNG cuadrado o circular, fondo transparente, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
+                    <ImagePickerField label="Imagen del sello vacío" hint="Opcional. Ícono para la casilla sin ganar" previewUrl={stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null)} uploading={uploadingStampEmpty} error={stampEmptyError} onPick={handlePickStampEmpty} />
+                  </div>
+                )}
               </div>
             )}
             <div className="mt-4 border-t border-slate-100 pt-4">
@@ -842,7 +892,13 @@ export function ProgramEditor() {
                   businessInfo: { design: passDesign },
                 }}
                 config={form.type === 'visits'
-                  ? { visitsTarget: Number.parseInt(form.visitsTarget, 10) || 10, rewardDescription: form.rewardDescription, visualStyle: form.visitsVisualStyle, stampImageUrl: stampPending?.previewUrl ?? (form.stampImageUrl || null) }
+                  ? {
+                      visitsTarget: Number.parseInt(form.visitsTarget, 10) || 10,
+                      rewardDescription: form.rewardDescription,
+                      visualStyle: form.visitsVisualStyle,
+                      stampImageUrl: stampPending?.previewUrl ?? (form.stampImageUrl || null),
+                      stampEmptyImageUrl: stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null),
+                    }
                   : { minPointsToRedeem: Number.parseInt(form.minPointsToRedeem, 10) || 10 }}
                 editable
                 selectedZone={selectedAppearanceZone}
