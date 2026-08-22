@@ -4,6 +4,13 @@ import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
 import { useAuthStore } from '@/store/authStore'
 
+// birthdayDate viene del API como fecha/hora completa (ej. "1993-02-02T00:00:00.000Z")
+// porque un Date de JS siempre serializa así — <input type="date"> exige
+// exactamente "YYYY-MM-DD" o lo ignora sin avisar.
+function toDateInputValue(value: string | null | undefined): string {
+  return value ? value.slice(0, 10) : ''
+}
+
 export function CustomerDetail() {
   const { programId, customerId } = useParams<{ programId: string; customerId: string }>()
   const navigate = useNavigate()
@@ -41,7 +48,7 @@ export function CustomerDetail() {
     setEditPhone(customer.phone)
     setEditEmail(customer.email ?? '')
     setEditGender(customer.gender ?? '')
-    setEditBirthday(customer.birthdayDate ?? '')
+    setEditBirthday(toDateInputValue(customer.birthdayDate))
     setEditCustomFields(customer.customFieldValues ?? {})
     setEditError('')
   }, [customer?.id])
