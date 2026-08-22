@@ -1,18 +1,33 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
 
 export function Customers() {
   const { programId } = useParams<{ programId: string }>()
-  const { customers, isLoadingCustomers, loadCustomers } = useProgramsStore()
+  const navigate = useNavigate()
+  const { customers, isLoadingCustomers, loadCustomers, deleteCustomer } = useProgramsStore()
   const [search, setSearch] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => { if (programId) void loadCustomers(programId) }, [programId])
 
   const filtered = customers.filter(c =>
     !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
   )
+
+  async function handleDelete(customerId: string, name: string) {
+    if (!programId) return
+    if (!confirm(`¿Eliminar a "${name}" y todo su historial de transacciones? Esta acción no se puede deshacer.`)) return
+    setDeletingId(customerId)
+    try {
+      await deleteCustomer(programId, customerId)
+    } catch (err: any) {
+      alert(err?.message ?? 'No se pudo eliminar el cliente')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div>
@@ -35,13 +50,14 @@ export function Customers() {
                 <th className="px-4 py-3">Saldo</th>
                 <th className="px-4 py-3">Segmento</th>
                 <th className="px-4 py-3">Última actividad</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(c => (
                 <tr key={c.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link to={`/programas/${programId}/clientes/${c.id}`} className="font-semibold text-gray-900 hover:text-primary">{c.name}</Link>
+                    <p className="font-semibold text-gray-900">{c.name}</p>
                     <p className="text-xs text-gray-400">{c.phone}</p>
                   </td>
                   <td className="px-4 py-3">
@@ -57,6 +73,25 @@ export function Customers() {
                   </td>
                   <td className="px-4 py-3 capitalize">{c.segment.replace('_', ' ')}</td>
                   <td className="px-4 py-3 text-gray-500">{c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleDateString('es-MX') : 'Sin actividad'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => navigate(`/programas/${programId}/clientes/${c.id}`)}
+                        title="Editar"
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        <Icon name="edit" size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id, c.name)}
+                        disabled={deletingId === c.id}
+                        title="Eliminar"
+                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <Icon name="trash" size={16} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

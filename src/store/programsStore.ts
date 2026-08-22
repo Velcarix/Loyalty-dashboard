@@ -43,7 +43,11 @@ interface ProgramsState {
 
   loadCustomers: (programId: string) => Promise<void>
   adjustPoints: (programId: string, customerId: string, delta: number, note: string, adjustedBy: string) => Promise<void>
-  updateCustomer: (programId: string, customerId: string, data: { name?: string; phone?: string; email?: string | null }) => Promise<void>
+  updateCustomer: (programId: string, customerId: string, data: {
+    name?: string; phone?: string; email?: string | null
+    gender?: string | null; birthdayDate?: string | null
+    customFieldValues?: Record<string, string> | null
+  }) => Promise<void>
   deleteCustomer: (programId: string, customerId: string) => Promise<void>
 
   loadTransactions: (programId: string) => Promise<void>
