@@ -105,7 +105,7 @@ export function Notifications() {
           <div className="space-y-1.5">
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={appleWalletEnabled} onChange={e => setAppleWalletEnabled(e.target.checked)} />
-              Apple Wallet (banner en la tarjeta de quien ya la agregó a su Wallet)
+              Apple/Google Wallet (banner en la tarjeta de quien ya la agregó a su Wallet)
             </label>
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
