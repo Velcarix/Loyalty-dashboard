@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, getToken, setToken } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { useProgramsStore } from '@/store/programsStore'
 
 const merchant = {
   id: 'merchant-1',
@@ -99,6 +100,48 @@ describe('authentication lifecycle', () => {
     await hydration
 
     expect(useAuthStore.getState()).toMatchObject({ token: null, merchant: null, isAuthenticated: false })
+  })
+
+  it('clears loyalty data when the merchant logs out', () => {
+    useProgramsStore.setState({
+      programs: [null as never],
+      customers: [null as never],
+      transactions: [null as never],
+      rewards: [null as never],
+      analytics: { totalCustomers: 1 } as never,
+    })
+
+    useAuthStore.getState().logout()
+
+    expect(useProgramsStore.getState()).toMatchObject({
+      programs: [],
+      customers: [],
+      transactions: [],
+      rewards: [],
+      analytics: null,
+    })
+  })
+
+  it('does not restore a prior merchant’s program list after logout', async () => {
+    setToken('merchant-a-token')
+    let resolveList!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn()
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { resolveList = resolve }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          id: 'program-a', businessId: 'merchant-a', name: 'Programa A', type: 'visits', isActive: true,
+          brandColor: '#2563EB', logoUrl: '', bannerUrl: null, programName: 'Programa A', description: 'Visitas',
+          welcomeMessage: null, saldoLabel: null, businessInfo: null, askBirthday: false, askGender: false,
+          customFields: null, createdAt: '2026-08-21T00:00:00.000Z', updatedAt: '2026-08-21T00:00:00.000Z',
+        },
+      })))
+
+    const loadingPrograms = useProgramsStore.getState().loadPrograms()
+    useAuthStore.getState().logout()
+    resolveList(jsonResponse({ data: [{ id: 'program-a' }] }))
+    await loadingPrograms
+
+    expect(useProgramsStore.getState().programs).toEqual([])
   })
 
   it('does not overwrite a newer login when old hydration completes', async () => {

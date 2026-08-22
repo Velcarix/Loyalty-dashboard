@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, getToken, setToken, clearToken, setUnauthorizedHandler } from '@/lib/api'
+import { useProgramsStore } from '@/store/programsStore'
 import type { MerchantProfile, MerchantLocation } from '@/types/loyalty'
 
 interface AuthState {
@@ -29,6 +30,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async hydrate() {
     const token = getToken()
     if (!token) {
+      useProgramsStore.getState().reset()
       set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false, isHydrated: true })
       return
     }
@@ -48,6 +50,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         email, password, businessName, vertical, phone,
       })
       setToken(data.token)
+      useProgramsStore.getState().reset()
       set({ token: data.token, merchant: data.merchant, isAuthenticated: true })
       return { ok: true }
     } catch (err: any) {
@@ -59,6 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const data = await api.post<{ token: string; merchant: MerchantProfile }>('/api/v1/auth/login', { email, password })
       setToken(data.token)
+      useProgramsStore.getState().reset()
       set({ token: data.token, merchant: data.merchant, isAuthenticated: true })
       return { ok: true }
     } catch (err: any) {
@@ -68,6 +72,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout() {
     clearToken()
+    useProgramsStore.getState().reset()
     set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false })
   },
 
@@ -84,6 +89,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const status = (error as { status?: number }).status
       if (status === 401 && getToken() === requestToken) {
         clearToken()
+        useProgramsStore.getState().reset()
         set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false })
       }
       return status === 401 ? false : null

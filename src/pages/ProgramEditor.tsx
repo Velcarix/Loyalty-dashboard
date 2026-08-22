@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, Link, Navigate } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { useAuthStore } from '@/store/authStore'
 import { WalletPassPreview } from '@/components/WalletPassPreview'
@@ -134,7 +134,7 @@ interface Form {
 }
 
 const DEFAULTS: Form = {
-  type: 'points',
+  type: 'visits',
   programName: '',
   description: '',
   brandColor: '#2563EB',
@@ -209,57 +209,16 @@ function ImagePickerField({
   )
 }
 
-function PointsRiskModal({
-  onUseVisits, onAcceptRisk, onClose,
-}: {
-  onUseVisits: () => void
-  onAcceptRisk: () => void
-  onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100">
-          <Icon name="shield" size={22} className="text-amber-700" />
-        </div>
-        <h2 className="mb-1 text-lg font-bold text-gray-900">Puntos sin POS vinculado</h2>
-        <p className="mb-4 text-sm text-gray-500">Para tu operación, esto es lo que estarías asumiendo:</p>
-
-        <div className="mb-4 space-y-3 text-sm text-gray-700">
-          <p>El monto de cada compra lo teclea a mano el mismo empleado que registra la acumulación. No hay nada que lo valide en el momento.</p>
-          <p>No hay forma de prevenir que un empleado infle el monto para dar más puntos — solo se detecta después, en el reporte de anomalías.</p>
-        </div>
-
-        <div className="mb-5 rounded-xl bg-gray-100 px-4 py-3">
-          <p className="text-xs text-gray-600">
-            Si continúas de todos modos, dejamos el límite diario de acumulaciones fijo en 1 por cliente y el reporte de anomalías activo, para acotar el impacto.
-          </p>
-        </div>
-
-        <button type="button" onClick={onUseVisits} className="mb-2.5 w-full rounded-xl bg-primary py-3 text-sm font-bold text-white">
-          Usar Visitas (recomendado)
-        </button>
-        <button type="button" onClick={onAcceptRisk} className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600">
-          Entiendo el riesgo, continuar con Puntos
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export function ProgramEditor() {
   const { programId } = useParams<{ programId: string }>()
   const isEditing = !!programId
   const navigate = useNavigate()
   const posLinked = useAuthStore(s => s.posLink?.linked ?? false)
-  const { programs, createProgram, updateProgram } = useProgramsStore()
-  const [form, setForm] = useState<Form>(() => ({
-    ...DEFAULTS,
-    type: isEditing || posLinked ? DEFAULTS.type : 'visits',
-  }))
+  const { programs, loadPrograms, createProgram, updateProgram } = useProgramsStore()
+  const [form, setForm] = useState<Form>(DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [riskModalOpen, setRiskModalOpen] = useState(false)
+  const [isCheckingProgramLimit, setIsCheckingProgramLimit] = useState(() => !isEditing && programs.length === 0)
   const [selectedAppearanceZone, setSelectedAppearanceZone] = useState<PassAppearanceZone>('background')
 
   // Logo/banner: si el programa ya existe (edición) se sube de inmediato al
@@ -340,27 +299,6 @@ export function ProgramEditor() {
     }
   }
 
-  function changeProgramType(t: 'points' | 'visits', pointsRiskAcceptedAt?: string) {
-    setForm(f => ({
-      ...f,
-      type: t,
-      pointsRiskAcceptedAt: pointsRiskAcceptedAt ?? f.pointsRiskAcceptedAt,
-      // Stamp grids are meaningful only for visit programs. Keep a valid
-      // visual template when an editor changes the program type.
-      design: t === 'points' && normalizePassDesign(f.design).template === 'stamps'
-        ? applyPassTemplate(f.design, 'classic')
-        : f.design,
-    }))
-  }
-
-  function handleTypeSelect(t: 'points' | 'visits') {
-    if (t === 'points' && !posLinked && !form.pointsRiskAcceptedAt) {
-      setRiskModalOpen(true)
-      return
-    }
-    changeProgramType(t)
-  }
-
   function updatePassDesign(change: Partial<typeof DEFAULT_PASS_DESIGN>) {
     setForm(current => ({
       ...current,
@@ -391,11 +329,22 @@ export function ProgramEditor() {
   }
 
   const antifraudLocked = form.type === 'points' && !posLinked
+  const hasExistingPrograms = programs.length > 0
   useEffect(() => {
     if (antifraudLocked && form.maxVisitsPerDay !== '1') {
       setForm(f => ({ ...f, maxVisitsPerDay: '1' }))
     }
   }, [antifraudLocked])
+
+  // El listado ya carga los programas, pero esta comprobación también cubre
+  // accesos directos a /programas/nuevo en una pestaña nueva.
+  useEffect(() => {
+    if (isEditing || hasExistingPrograms) {
+      setIsCheckingProgramLimit(false)
+      return
+    }
+    void loadPrograms().finally(() => setIsCheckingProgramLimit(false))
+  }, [hasExistingPrograms, isEditing, loadPrograms])
 
   useEffect(() => {
     if (!isEditing || !programId) return
@@ -435,6 +384,11 @@ export function ProgramEditor() {
       pointsRiskAcceptedAt: pc?.noPosRiskAcknowledgedAt ?? null,
     })
   }, [programId, programs])
+
+  const existingProgram = !isEditing ? programs[0]?.program : undefined
+  if (existingProgram) {
+    return <Navigate to={`/programas/${existingProgram.id}`} replace />
+  }
 
   function buildConfig() {
     return form.type === 'points'
@@ -480,6 +434,10 @@ export function ProgramEditor() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!isEditing && isCheckingProgramLimit) {
+      setError('Estamos verificando si ya tienes un programa. Intenta de nuevo en un momento.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -496,9 +454,14 @@ export function ProgramEditor() {
       } else {
         const created = await createProgram({
           name: form.programName,
-          type: form.type,
+          type: 'visits',
           ...programData,
-          config: buildConfig(),
+          config: buildVisitsConfig({
+            visitsTarget: form.visitsTarget,
+            rewardDescription: form.rewardDescription,
+            maxVisitsPerDay: form.maxVisitsPerDay,
+            visualStyle: form.visitsVisualStyle,
+          }),
         })
         const uploadWarnings: string[] = []
         if (logoPending) {
@@ -522,6 +485,15 @@ export function ProgramEditor() {
         navigate(`/programas/${created.id}`)
       }
     } catch (err) {
+      const apiError = err as Error & { code?: string; status?: number }
+      if (!isEditing && apiError.status === 409 && apiError.code === 'PROGRAM_ALREADY_EXISTS') {
+        await loadPrograms()
+        const existingProgram = useProgramsStore.getState().programs[0]?.program
+        if (existingProgram) {
+          navigate(`/programas/${existingProgram.id}`, { replace: true })
+          return
+        }
+      }
       setError(err instanceof Error ? err.message : 'No se pudo guardar el programa')
     } finally {
       setSaving(false)
@@ -537,16 +509,6 @@ export function ProgramEditor() {
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-      {riskModalOpen && (
-        <PointsRiskModal
-          onClose={() => setRiskModalOpen(false)}
-          onUseVisits={() => { setForm(f => ({ ...f, type: 'visits' })); setRiskModalOpen(false) }}
-          onAcceptRisk={() => {
-            changeProgramType('points', new Date().toISOString())
-            setRiskModalOpen(false)
-          }}
-        />
-      )}
       <Link
         to={isEditing ? `/programas/${programId}` : '/programas'}
         className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-primary transition hover:text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -567,37 +529,14 @@ export function ProgramEditor() {
       <div className="grid grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1fr)_400px]">
         <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           {!isEditing && (
-            <section>
-              <div className="mb-3">
-                <p className="text-sm font-bold text-slate-950">1. Mecánica del programa</p>
-                <p className="mt-1 text-xs text-slate-500">Elige cómo tus clientes desbloquean su beneficio.</p>
+            <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white"><Icon name="program" size={18} /></span>
+                <div>
+                  <p className="text-sm font-bold text-slate-950">1. Programa de visitas</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">Cuentan visitas hasta un objetivo. Cada negocio administra un solo programa de lealtad.</p>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {(['points', 'visits'] as const).map(t => (
-                  <button
-                    key={t} type="button"
-                    onClick={() => handleTypeSelect(t)}
-                    aria-pressed={form.type === t}
-                    className={`rounded-2xl border-2 px-4 py-4 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${form.type === t ? 'border-primary bg-primary/5 shadow-sm' : 'border-slate-200 hover:border-slate-300'}`}
-                  >
-                    <span className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${form.type === t ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'}`}>
-                      <Icon name={t === 'points' ? 'sparkles' : 'program'} size={18} />
-                    </span>
-                    <p className="font-bold text-slate-950">{t === 'points' ? 'Puntos' : 'Visitas'}</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">{t === 'points' ? 'Ganan puntos por compra' : 'Cuentan visitas hasta un objetivo'}</p>
-                    {t === 'points' && !posLinked && (
-                      <p className={`mt-1 text-xs font-semibold ${form.pointsRiskAcceptedAt ? 'text-green-600' : 'text-amber-600'}`}>
-                        {form.pointsRiskAcceptedAt ? 'Riesgo aceptado' : 'Requiere aceptar el riesgo — sin POS vinculado'}
-                      </p>
-                    )}
-                  </button>
-                ))}
-              </div>
-              {!posLinked && (
-                <p className="mt-2 text-xs text-gray-500">
-                  No tienes Copo POS vinculado. Recomendamos Visitas — con Puntos, el monto de cada venta lo captura a mano el mismo empleado que acumula.
-                </p>
-              )}
             </section>
           )}
 
@@ -884,7 +823,7 @@ export function ProgramEditor() {
           </button>
         </form>
 
-        <aside className="h-fit xl:sticky xl:top-6">
+        <aside className="h-fit self-start lg:sticky lg:top-6">
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
               <div><p className="text-sm font-bold text-slate-950">Vista de cliente</p><p className="mt-0.5 text-xs text-slate-500">Toca una zona para editarla</p></div>

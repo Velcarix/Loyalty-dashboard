@@ -14,6 +14,7 @@ export interface ProgramFull {
 interface ProgramsState {
   programs: ProgramFull[]
   isLoading: boolean
+  requestGeneration: number
 
   customers: LoyaltyCustomer[]
   isLoadingCustomers: boolean
@@ -28,13 +29,14 @@ interface ProgramsState {
   notifications: LoyaltyNotification[]
   isLoadingNotifications: boolean
 
+  reset: () => void
   loadPrograms: () => Promise<void>
   getProgram: (programId: string) => ProgramFull | undefined
   createProgram: (data: {
-    name: string; type: 'points' | 'visits'; brandColor: string; programName: string
+    name: string; type: 'visits'; brandColor: string; programName: string
     description: string; welcomeMessage?: string
     saldoLabel?: string | null; businessInfo?: LoyaltyProgram['businessInfo']
-    config: Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>
+    config: Omit<LoyaltyVisitsConfig, 'programId'>
   }) => Promise<LoyaltyProgram>
   updateProgram: (programId: string, data: Partial<LoyaltyProgram>, config?: Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) => Promise<void>
   toggleProgram: (programId: string, isActive: boolean) => Promise<void>
@@ -65,6 +67,7 @@ interface ProgramsState {
 export const useProgramsStore = create<ProgramsState>((set, get) => ({
   programs: [],
   isLoading: false,
+  requestGeneration: 0,
   customers: [],
   isLoadingCustomers: false,
   transactions: [],
@@ -78,7 +81,26 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   notifications: [],
   isLoadingNotifications: false,
 
+  reset: () => set({
+    requestGeneration: get().requestGeneration + 1,
+    programs: [],
+    isLoading: false,
+    customers: [],
+    isLoadingCustomers: false,
+    transactions: [],
+    isLoadingTransactions: false,
+    rewards: [],
+    isLoadingRewards: false,
+    analytics: null,
+    isLoadingAnalytics: false,
+    anomalies: [],
+    isLoadingAnomalies: false,
+    notifications: [],
+    isLoadingNotifications: false,
+  }),
+
   loadPrograms: async () => {
+    const requestGeneration = get().requestGeneration
     set({ isLoading: true })
     try {
       const programs = await api.get<LoyaltyProgram[]>('/api/v1/loyalty/programs')
@@ -92,8 +114,10 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
           }
         })
       )
+      if (get().requestGeneration !== requestGeneration) return
       set({ programs: enriched, isLoading: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ programs: [], isLoading: false })
     }
   },
@@ -101,27 +125,26 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   getProgram: (programId) => get().programs.find(p => p.program.id === programId),
 
   createProgram: async (data) => {
+    const requestGeneration = get().requestGeneration
     const { config, ...programData } = data
-    const program = await api.post<LoyaltyProgram>('/api/v1/loyalty/programs', programData)
-    let savedConfig: LoyaltyPointsConfig | LoyaltyVisitsConfig
-    if (program.type === 'points') {
-      savedConfig = await api.put<LoyaltyPointsConfig>(`/api/v1/loyalty/programs/${program.id}/config/points`, config)
-    } else {
-      savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${program.id}/config/visits`, config)
-    }
+    const program = await api.post<LoyaltyProgram>('/api/v1/loyalty/programs', { ...programData, config })
+    const savedConfig: LoyaltyVisitsConfig = { ...config, programId: program.id }
+    if (get().requestGeneration !== requestGeneration) return program
     set(s => ({ programs: [{ program, config: savedConfig }, ...s.programs] }))
     return program
   },
 
   updateProgram: async (programId, data, config) => {
+    const requestGeneration = get().requestGeneration
+    const currentProgram = get().getProgram(programId)
     const savedProgram = await api.put<LoyaltyProgram>(`/api/v1/loyalty/programs/${programId}`, data)
     let savedConfig: LoyaltyPointsConfig | LoyaltyVisitsConfig | undefined
     if (config) {
-      const existing = get().getProgram(programId)
-      const type = existing?.program.type ?? 'points'
+      const type = currentProgram?.program.type ?? 'points'
       if (type === 'points') savedConfig = await api.put<LoyaltyPointsConfig>(`/api/v1/loyalty/programs/${programId}/config/points`, config)
       else savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${programId}/config/visits`, config)
     }
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({
       programs: s.programs.map(p => p.program.id === programId
         ? { ...p, program: savedProgram, config: savedConfig ?? p.config }
@@ -130,23 +153,30 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   },
 
   toggleProgram: async (programId, isActive) => {
+    const requestGeneration = get().requestGeneration
     if (isActive) await api.put(`/api/v1/loyalty/programs/${programId}`, { isActive: true })
     else await api.delete(`/api/v1/loyalty/programs/${programId}`)
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({ programs: s.programs.map(p => p.program.id === programId ? { ...p, program: { ...p.program, isActive } } : p) }))
   },
 
   loadCustomers: async (programId) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingCustomers: true })
     try {
       const customers = await api.get<LoyaltyCustomer[]>(`/api/v1/loyalty/programs/${programId}/customers?limit=100&sortBy=lastActivityAt&sortDir=desc`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ customers: customers ?? [], isLoadingCustomers: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ customers: [], isLoadingCustomers: false })
     }
   },
 
   adjustPoints: async (programId, customerId, delta, note, adjustedBy) => {
+    const requestGeneration = get().requestGeneration
     await api.post(`/api/v1/loyalty/programs/${programId}/customers/${customerId}/adjust-points`, { delta, note, adjustedBy })
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({
       customers: s.customers.map(c => c.id === customerId
         ? { ...c, pointsBalance: c.pointsBalance + delta, totalEarnedPoints: delta > 0 ? c.totalEarnedPoints + delta : c.totalEarnedPoints }
@@ -155,76 +185,101 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   },
 
   updateCustomer: async (programId, customerId, data) => {
+    const requestGeneration = get().requestGeneration
     const updated = await api.put<LoyaltyCustomer>(`/api/v1/loyalty/programs/${programId}/customers/${customerId}`, data)
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({ customers: s.customers.map(c => c.id === customerId ? updated : c) }))
   },
 
   deleteCustomer: async (programId, customerId) => {
+    const requestGeneration = get().requestGeneration
     await api.delete(`/api/v1/loyalty/programs/${programId}/customers/${customerId}`)
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({ customers: s.customers.filter(c => c.id !== customerId) }))
   },
 
   loadTransactions: async (programId) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingTransactions: true })
     try {
       const txs = await api.get<LoyaltyTransaction[]>(`/api/v1/loyalty/programs/${programId}/transactions?limit=100`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ transactions: txs ?? [], isLoadingTransactions: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ transactions: [], isLoadingTransactions: false })
     }
   },
 
   loadRewards: async (programId) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingRewards: true })
     try {
       const rewards = await api.get<LoyaltyReward[]>(`/api/v1/loyalty/programs/${programId}/rewards`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ rewards: rewards ?? [], isLoadingRewards: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ rewards: [], isLoadingRewards: false })
     }
   },
 
   createReward: async (programId, body) => {
+    const requestGeneration = get().requestGeneration
     await api.post(`/api/v1/loyalty/programs/${programId}/rewards`, body)
+    if (get().requestGeneration !== requestGeneration) return
     await get().loadRewards(programId)
   },
 
   updateReward: async (programId, rewardId, body) => {
+    const requestGeneration = get().requestGeneration
     await api.put(`/api/v1/loyalty/programs/${programId}/rewards/${rewardId}`, body)
+    if (get().requestGeneration !== requestGeneration) return
     await get().loadRewards(programId)
   },
 
   deleteReward: async (programId, rewardId) => {
+    const requestGeneration = get().requestGeneration
     await api.delete(`/api/v1/loyalty/programs/${programId}/rewards/${rewardId}`)
+    if (get().requestGeneration !== requestGeneration) return
     set(s => ({ rewards: s.rewards.filter(r => r.id !== rewardId) }))
   },
 
   loadAnalytics: async (programId, startDate, endDate) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingAnalytics: true })
     try {
       const analytics = await api.get<AnalyticsData>(`/api/v1/loyalty/programs/${programId}/analytics?startDate=${startDate}&endDate=${endDate}`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ analytics, isLoadingAnalytics: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ analytics: null, isLoadingAnalytics: false })
     }
   },
 
   loadAnomalies: async (programId) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingAnomalies: true })
     try {
       const anomalies = await api.get<Anomaly[]>(`/api/v1/loyalty/programs/${programId}/analytics/anomalies`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ anomalies: anomalies ?? [], isLoadingAnomalies: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ anomalies: [], isLoadingAnomalies: false })
     }
   },
 
   loadNotifications: async (programId) => {
+    const requestGeneration = get().requestGeneration
     set({ isLoadingNotifications: true })
     try {
       const notifications = await api.get<LoyaltyNotification[]>(`/api/v1/loyalty/programs/${programId}/notifications?limit=50`)
+      if (get().requestGeneration !== requestGeneration) return
       set({ notifications: notifications ?? [], isLoadingNotifications: false })
     } catch {
+      if (get().requestGeneration !== requestGeneration) return
       set({ notifications: [], isLoadingNotifications: false })
     }
   },
@@ -235,7 +290,9 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   },
 
   sendNotification: async (programId, body) => {
+    const requestGeneration = get().requestGeneration
     const notification = await api.post<LoyaltyNotification>(`/api/v1/loyalty/programs/${programId}/notifications`, body)
+    if (get().requestGeneration !== requestGeneration) return notification
     set(s => ({ notifications: [notification, ...s.notifications] }))
     return notification
   },

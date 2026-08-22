@@ -7,6 +7,7 @@ import type { LoyaltyPointsConfig, LoyaltyVisitsConfig } from '@/types/loyalty'
 
 export function ProgramsList() {
   const { programs, isLoading, loadPrograms } = useProgramsStore()
+  const canCreateProgram = programs.length === 0
 
   useEffect(() => { void loadPrograms() }, [])
 
@@ -15,17 +16,17 @@ export function ProgramsList() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-primary">Loyalty</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Tus programas</h1>
-          <p className="mt-2 text-sm text-slate-500">Diseña, publica y opera cada experiencia de lealtad desde Copo.</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Tu programa</h1>
+          <p className="mt-2 text-sm text-slate-500">Diseña, publica y opera tu experiencia de lealtad desde Copo.</p>
         </div>
-        <Link to="/programas/nuevo" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition hover:bg-primary-dark focus:outline-none focus:ring-4 focus:ring-primary/30"><Icon name="plus" size={17} /> Nuevo programa</Link>
+        {canCreateProgram && <Link to="/programas/nuevo" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition hover:bg-primary-dark focus:outline-none focus:ring-4 focus:ring-primary/30"><Icon name="plus" size={17} /> Crear programa</Link>}
       </div>
 
       {isLoading && programs.length === 0 && (
         <div className="rounded-3xl border border-slate-200 bg-white py-16 text-center text-sm text-slate-400">Cargando tus programas…</div>
       )}
 
-      {!isLoading && programs.length === 0 && (
+      {!isLoading && canCreateProgram && (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white py-16 text-center shadow-sm">
           <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon name="program" size={26} /></span>
           <p className="mb-1 text-lg font-bold text-slate-950">Aún no tienes programas</p>

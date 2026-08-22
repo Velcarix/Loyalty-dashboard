@@ -76,29 +76,13 @@ afterEach(async () => {
 })
 
 describe('ProgramEditor configuration handoff', () => {
-  it('normalizes a stamps design to Classic when a no-POS merchant accepts the points-risk modal', () => {
-    useAuthStore.setState({ posLink: null })
+  it('keeps the stamps visual template selectable in the visits-only creation flow', () => {
     const form = renderEditor('/programas/nuevo')
     const stampsTemplate = Array.from(form.querySelectorAll('button')).find(button => button.textContent?.includes('Visitas visuales con sello personalizado'))
 
     expect(stampsTemplate).toBeInstanceOf(HTMLButtonElement)
     act(() => stampsTemplate?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(stampsTemplate?.getAttribute('aria-pressed')).toBe('true')
-
-    const pointsType = Array.from(form.querySelectorAll('button')).find(button => button.textContent?.includes('Ganan puntos por compra'))
-    expect(pointsType).toBeInstanceOf(HTMLButtonElement)
-    act(() => pointsType?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-
-    const acceptRisk = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.includes('Entiendo el riesgo, continuar con Puntos'))
-    expect(acceptRisk).toBeInstanceOf(HTMLButtonElement)
-    act(() => acceptRisk?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-
-    const updatedStampsTemplate = Array.from(form.querySelectorAll('button')).find(button => button.textContent?.includes('Visitas visuales con sello personalizado')) as HTMLButtonElement
-    const classicTemplate = Array.from(form.querySelectorAll('button')).find(button => button.textContent?.includes('Contador grande, sobria y premium'))
-
-    expect(updatedStampsTemplate.disabled).toBe(true)
-    expect(updatedStampsTemplate.getAttribute('aria-pressed')).toBe('false')
-    expect(classicTemplate?.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('keeps the stamps template unavailable for a points program', () => {
