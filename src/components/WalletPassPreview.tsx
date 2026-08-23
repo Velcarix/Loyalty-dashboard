@@ -132,12 +132,16 @@ export function WalletPassPreview({
   // program configuration.
   const useStampGrid = !isPoints && visitsConfig?.visualStyle === 'stamp'
   const saldoLabel = program.saldoLabel || (isPoints ? 'Puntos' : 'Visitas')
+  const stampSingular = design.terminology.stampSingular || 'visita'
+  const stampPlural = design.terminology.stampPlural || 'visitas'
+  const rewardWord = design.terminology.rewardSingular || 'premio'
+  const remainingVisits = target ? target - sampleVisits : 0
   const progressText = isPoints
     ? (pointsConfig?.minPointsToRedeem && pointsConfig.minPointsToRedeem > sampleBalance
         ? `Te faltan ${pointsConfig.minPointsToRedeem - sampleBalance} para canjear`
         : 'Tu saldo está listo para usar')
-    : (target && target > sampleVisits
-        ? `Te faltan ${target - sampleVisits} para ${visitsConfig?.rewardDescription || 'tu premio'}`
+    : (target && remainingVisits > 0
+        ? `Te faltan ${remainingVisits} ${remainingVisits === 1 ? stampSingular : stampPlural} para ${visitsConfig?.rewardDescription || `tu ${rewardWord}`}`
         : 'Meta alcanzada')
   const rewardColor = design.rewardColor
   const rewardTextColor = getTextColorForBg(rewardColor)
@@ -254,10 +258,17 @@ export function WalletPassPreview({
             className="p-2"
           >
             <span className="block rounded-xl px-3 py-2.5 shadow-sm" style={{ backgroundColor: rewardColor, color: rewardTextColor }}>
-              <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">Premio</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">{rewardWord}</span>
               <span className="mt-0.5 block text-xs font-bold">{visitsConfig?.rewardDescription || program.description || 'Beneficio para tu próxima visita'}</span>
             </span>
           </PreviewZone>
+
+          {design.showMemberName && (
+            <div className="px-2">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: subColor }}>Miembro</span>
+              <span className="block text-xs font-semibold" style={{ color: textColor }}>Roberto Vargas</span>
+            </div>
+          )}
 
           <ProtectedQr accentColor={design.accentColor} />
         </div>

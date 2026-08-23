@@ -789,6 +789,33 @@ export function ProgramEditor() {
                   </div>
                 </div>}
               </div>
+
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                <input type="checkbox" checked={passDesign.showMemberName} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, showMemberName: e.target.checked } }))} className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                <span><span className="block font-semibold">Mostrar nombre del cliente</span><span className="text-xs text-slate-500">Aparece en la tarjeta, siempre debajo del progreso y el premio.</span></span>
+              </label>
+
+              {form.type === 'visits' && (
+                <div>
+                  <p className="mb-1.5 text-xs font-bold text-slate-600">Cómo le llamas a...</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label>
+                      <span className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Sello (singular / plural)</span><span>{(passDesign.terminology.stampSingular ?? '').length}/20</span></span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input maxLength={20} value={passDesign.terminology.stampSingular ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, stampSingular: e.target.value } } }))} placeholder="visita" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                        <input maxLength={20} value={passDesign.terminology.stampPlural ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, stampPlural: e.target.value } } }))} placeholder="visitas" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                      </div>
+                    </label>
+                    <label>
+                      <span className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Premio (singular / plural)</span><span>{(passDesign.terminology.rewardSingular ?? '').length}/20</span></span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input maxLength={20} value={passDesign.terminology.rewardSingular ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, rewardSingular: e.target.value } } }))} placeholder="premio" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                        <input maxLength={20} value={passDesign.terminology.rewardPlural ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, rewardPlural: e.target.value } } }))} placeholder="premios" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 
@@ -814,6 +841,12 @@ export function ProgramEditor() {
                   <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Visitas para ganar el premio</span><input type="number" min="1" value={form.visitsTarget} onChange={e => setForm(f => ({ ...f, visitsTarget: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
                   <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Premio</span><input required value={form.rewardDescription} onChange={e => setForm(f => ({ ...f, rewardDescription: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Café americano gratis" /></label>
                 </div>
+                {isEditing && programId && (
+                  <p className="text-xs leading-5 text-slate-500">
+                    ¿Quieres más de un nivel de premio (ej. 5 visitas → café, 10 → postre)? Agrega niveles adicionales en{' '}
+                    <Link to={`/programas/${programId}/rewards`} className="font-semibold text-primary hover:underline">Recompensas</Link>.
+                  </p>
+                )}
                 <div>
                   <p className="mb-2 text-sm font-semibold text-slate-700">Formato de progreso</p>
                   <div className="grid grid-cols-2 gap-2">

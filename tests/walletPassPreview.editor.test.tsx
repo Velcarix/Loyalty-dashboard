@@ -37,6 +37,8 @@ function renderEditablePreview(
               stampFilledColor: '#FDF2F8',
               stampEmptyColor: '#F9A8D4',
               rewardColor: '#FFFFFF',
+              showMemberName: true,
+              terminology: {},
             },
           },
         }}

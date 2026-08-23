@@ -4,6 +4,13 @@ export type PassStampShape = 'circle' | 'rounded'
 export type PassTemplate = 'classic' | 'stamps' | 'brand'
 export type PassAppearanceZone = 'background' | 'identity' | 'progress' | 'stamps' | 'reward'
 
+export interface LoyaltyPassTerminology {
+  stampSingular?: string
+  stampPlural?: string
+  rewardSingular?: string
+  rewardPlural?: string
+}
+
 export interface LoyaltyPassDesignConfig {
   accentColor: string
   cardStyle: PassCardStyle
@@ -17,6 +24,10 @@ export interface LoyaltyPassDesignConfig {
   stampEmptyColor: string
   /** Surface color of the informative reward block, never the reward state itself. */
   rewardColor: string
+  /** Whether the member's name appears on the front of the pass. Default true. */
+  showMemberName: boolean
+  /** Custom wording for "sello/sellos" and "premio/premios". Empty = defaults. */
+  terminology: LoyaltyPassTerminology
 }
 
 export interface PassTemplateDefinition {
@@ -45,6 +56,8 @@ export const DEFAULT_PASS_DESIGN: LoyaltyPassDesignConfig = {
   stampFilledColor: '#FFFFFF',
   stampEmptyColor: '#FFFFFF',
   rewardColor: '#FFFFFF',
+  showMemberName: true,
+  terminology: {},
 }
 
 export const PASS_TEMPLATES: readonly PassTemplateDefinition[] = [
@@ -128,6 +141,13 @@ export function isHexColor(value: string): boolean {
   return HEX_COLOR.test(value)
 }
 
+const TERMINOLOGY_MAX_LENGTH = 20
+
+function normalizeTerminologyWord(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().slice(0, TERMINOLOGY_MAX_LENGTH)
+  return trimmed ? trimmed : undefined
+}
+
 export function normalizePassDesign(
   design: Partial<LoyaltyPassDesignConfig> | null | undefined,
 ): LoyaltyPassDesignConfig {
@@ -156,6 +176,13 @@ export function normalizePassDesign(
     rewardColor: design?.rewardColor && isHexColor(design.rewardColor)
       ? design.rewardColor
       : DEFAULT_PASS_DESIGN.rewardColor,
+    showMemberName: design?.showMemberName ?? DEFAULT_PASS_DESIGN.showMemberName,
+    terminology: {
+      stampSingular: normalizeTerminologyWord(design?.terminology?.stampSingular),
+      stampPlural: normalizeTerminologyWord(design?.terminology?.stampPlural),
+      rewardSingular: normalizeTerminologyWord(design?.terminology?.rewardSingular),
+      rewardPlural: normalizeTerminologyWord(design?.terminology?.rewardPlural),
+    },
   }
 }
 
