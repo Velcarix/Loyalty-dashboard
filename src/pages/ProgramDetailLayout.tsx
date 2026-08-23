@@ -35,12 +35,25 @@ export function ProgramDetailLayout() {
     }
   }
 
+  const bannerUrl = program?.program.bannerUrl
+  const logoUrl = program?.program.logoUrl
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <Link to="/programas" className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-primary transition hover:text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/30"><Icon name="arrow-left" size={16} /> Programas</Link>
+
+      {bannerUrl && (
+        <div className="mt-4 h-28 w-full overflow-hidden rounded-2xl border border-slate-200 sm:h-36">
+          <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+      )}
+
       <div className="mb-5 mt-4 flex flex-col gap-4 border-b border-slate-200 pb-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {logoUrl && (
+              <img src={logoUrl} alt="" className="h-11 max-w-[9rem] shrink-0 object-contain" />
+            )}
             <h1 className="truncate text-3xl font-bold tracking-tight text-slate-950">{program?.program.programName ?? 'Programa'}</h1>
           {program && !program.program.isActive && (
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-slate-500">Pausado</span>
