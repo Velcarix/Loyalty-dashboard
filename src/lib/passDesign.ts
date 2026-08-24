@@ -1,6 +1,6 @@
 export type PassCardStyle = 'solid' | 'gradient' | 'banner'
 export type PassLogoStyle = 'plate' | 'minimal'
-export type PassStampShape = 'circle' | 'rounded'
+export type PassStampShape = 'circle' | 'rounded' | 'square' | 'none'
 export type PassTemplate = 'classic' | 'stamps' | 'brand'
 export type PassAppearanceZone = 'background' | 'identity' | 'progress' | 'stamps' | 'reward'
 
@@ -22,6 +22,8 @@ export interface LoyaltyPassDesignConfig {
   stampFilledColor: string
   /** Color for an empty visit slot; it is never used as the only progress signal. */
   stampEmptyColor: string
+  /** Background of the stamp panel. Undefined = current translucent panel (does not break existing programs). */
+  stampAreaBackgroundColor?: string
   /** Surface color of the informative reward block, never the reward state itself. */
   rewardColor: string
   /** Whether the member's name appears on the front of the pass. Default true. */
@@ -162,6 +164,7 @@ export function normalizePassDesign(
       ? design.logoStyle
       : DEFAULT_PASS_DESIGN.logoStyle,
     stampShape: design?.stampShape === 'rounded' || design?.stampShape === 'circle'
+      || design?.stampShape === 'square' || design?.stampShape === 'none'
       ? design.stampShape
       : DEFAULT_PASS_DESIGN.stampShape,
     template: design?.template === 'stamps' || design?.template === 'brand' || design?.template === 'classic'
@@ -173,6 +176,11 @@ export function normalizePassDesign(
     stampEmptyColor: design?.stampEmptyColor && isHexColor(design.stampEmptyColor)
       ? design.stampEmptyColor
       : DEFAULT_PASS_DESIGN.stampEmptyColor,
+    // Undefined on purpose: it is the signal that means "keep the current
+    // translucent panel look" so pre-existing programs render unchanged.
+    stampAreaBackgroundColor: design?.stampAreaBackgroundColor && isHexColor(design.stampAreaBackgroundColor)
+      ? design.stampAreaBackgroundColor
+      : undefined,
     rewardColor: design?.rewardColor && isHexColor(design.rewardColor)
       ? design.rewardColor
       : DEFAULT_PASS_DESIGN.rewardColor,

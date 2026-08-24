@@ -544,9 +544,13 @@ export function ProgramEditor() {
 
   const passDesign = normalizePassDesign(form.design)
   const brandColorInput = isHexColor(form.brandColor) ? form.brandColor : DEFAULTS.brandColor
-  const hasLowStampContrast = form.type === 'visits' && (
-    getColorContrastRatio(passDesign.stampFilledColor, brandColorInput) < 3
-    || getColorContrastRatio(passDesign.stampEmptyColor, brandColorInput) < 3
+  // Compara contra el fondo que realmente queda detrás de los sellos: el
+  // color propio de la zona de sellos si se definió, o el fondo de la
+  // tarjeta cuando se usa el panel automático.
+  const stampAreaColorInput = passDesign.stampAreaBackgroundColor ?? brandColorInput
+  const hasLowStampContrast = form.type === 'visits' && passDesign.stampShape !== 'none' && (
+    getColorContrastRatio(passDesign.stampFilledColor, stampAreaColorInput) < 3
+    || getColorContrastRatio(passDesign.stampEmptyColor, stampAreaColorInput) < 3
   )
 
   return (
@@ -691,9 +695,35 @@ export function ProgramEditor() {
                       <ImagePickerField label="Imagen del sello lleno" accept="image/png,image/jpeg" hint="PNG o JPG, mín. 64×64px, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
                       <ImagePickerField label="Imagen del sello vacío" accept="image/png,image/jpeg" hint="Opcional. Ícono para la casilla sin ganar" previewUrl={stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null)} uploading={uploadingStampEmpty} error={stampEmptyError} onPick={handlePickStampEmpty} />
                     </div>
+                    <div>
+                      <p className="mb-1.5 text-xs font-bold text-slate-600">Forma</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['circle', 'rounded', 'square', 'none'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => updatePassDesign({ stampShape: option })} className={`min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{{ circle: 'Circular', rounded: 'Redondeado', square: 'Cuadrado', none: 'Sin contenedor' }[option]}</button>)}
+                      </div>
+                      {passDesign.stampShape === 'none' && <p className="mt-1.5 text-xs leading-5 text-slate-500">La imagen del sello se muestra tal cual, sin recorte ni fondo — ideal si ya tiene su propia forma y transparencia.</p>}
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div><p className="mb-1.5 text-xs font-bold text-slate-600">Forma</p><div className="grid grid-cols-2 gap-2">{(['circle', 'rounded'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => updatePassDesign({ stampShape: option })} className={`min-h-11 rounded-lg border px-2 py-2 text-xs font-semibold ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{option === 'circle' ? 'Circular' : 'Redondeado'}</button>)}</div></div>
-                      <div className="grid grid-cols-2 gap-2"><label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Lleno</span><input type="color" aria-label="Color de sello lleno" value={passDesign.stampFilledColor} onChange={e => updatePassDesign({ stampFilledColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label><label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Vacío</span><input type="color" aria-label="Color de sello vacío" value={passDesign.stampEmptyColor} onChange={e => updatePassDesign({ stampEmptyColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label></div>
+                      <label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Lleno</span><input type="color" aria-label="Color de sello lleno" value={passDesign.stampFilledColor} onChange={e => updatePassDesign({ stampFilledColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label>
+                      <label className="rounded-xl border border-slate-200 p-2"><span className="mb-1 block text-[11px] font-bold text-slate-600">Vacío</span><input type="color" aria-label="Color de sello vacío" value={passDesign.stampEmptyColor} onChange={e => updatePassDesign({ stampEmptyColor: e.target.value })} className="h-8 w-full cursor-pointer rounded border-0 bg-transparent p-0" /></label>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-600">Fondo de la zona de sellos</span>
+                        {passDesign.stampAreaBackgroundColor && <button type="button" onClick={() => updatePassDesign({ stampAreaBackgroundColor: undefined })} className="text-[11px] font-semibold text-primary hover:underline">Usar automático</button>}
+                      </div>
+                      <span className="flex items-center gap-2">
+                        <input type="color" aria-label="Color de fondo de la zona de sellos" value={passDesign.stampAreaBackgroundColor ?? '#12344D'} onChange={e => updatePassDesign({ stampAreaBackgroundColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
+                        <input
+                          value={passDesign.stampAreaBackgroundColor ?? ''}
+                          maxLength={7}
+                          pattern="#[0-9A-Fa-f]{6}"
+                          placeholder="Automático (mismo fondo translúcido de siempre)"
+                          onChange={e => updatePassDesign({ stampAreaBackgroundColor: e.target.value || undefined })}
+                          className="min-w-0 flex-1 bg-transparent font-mono text-xs uppercase text-slate-700 outline-none placeholder:normal-case placeholder:font-sans placeholder:text-slate-400"
+                          aria-label="Código hexadecimal del fondo de la zona de sellos"
+                        />
+                      </span>
+                      <p className="mt-1.5 text-xs leading-5 text-slate-500">Deja este campo vacío para conservar el fondo automático actual; escribe un HEX para usar un color propio (ej. un azul más oscuro que el fondo general).</p>
                     </div>
                     {hasLowStampContrast && <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Los sellos podrían perderse sobre este fondo. Usa un color con mayor contraste.</p>}
                   </div> : <p className="text-sm leading-6 text-slate-600">Los sellos están disponibles en programas de visitas. La tarjeta de puntos conserva su contador real.</p>
@@ -785,7 +815,7 @@ export function ProgramEditor() {
                 {form.type === 'visits' && form.visitsVisualStyle === 'stamp' && <div>
                   <p className="mb-1.5 text-xs font-bold text-slate-600">Forma de los sellos</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {(['circle', 'rounded'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, stampShape: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{option === 'circle' ? 'Circular' : 'Redondeado'}</button>)}
+                    {(['circle', 'rounded', 'square', 'none'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, stampShape: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{{ circle: 'Circular', rounded: 'Redondeado', square: 'Cuadrado', none: 'Sin contenedor' }[option]}</button>)}
                   </div>
                 </div>}
               </div>
