@@ -38,7 +38,11 @@ interface ProgramsState {
     saldoLabel?: string | null; businessInfo?: LoyaltyProgram['businessInfo']
     config: Omit<LoyaltyVisitsConfig, 'programId'>
   }) => Promise<LoyaltyProgram>
-  updateProgram: (programId: string, data: Partial<LoyaltyProgram>, config?: Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) => Promise<void>
+  updateProgram: (
+    programId: string,
+    data: Partial<LoyaltyProgram>,
+    config?: (Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) & { applyToExistingCustomers?: boolean },
+  ) => Promise<void>
   toggleProgram: (programId: string, isActive: boolean) => Promise<void>
 
   loadCustomers: (programId: string) => Promise<void>
@@ -53,9 +57,9 @@ interface ProgramsState {
   loadTransactions: (programId: string) => Promise<void>
 
   loadRewards: (programId: string) => Promise<void>
-  createReward: (programId: string, body: Partial<LoyaltyReward>) => Promise<void>
-  updateReward: (programId: string, rewardId: string, body: Partial<LoyaltyReward>) => Promise<void>
-  deleteReward: (programId: string, rewardId: string) => Promise<void>
+  createReward: (programId: string, body: Partial<LoyaltyReward> & { applyToExistingCustomers?: boolean }) => Promise<void>
+  updateReward: (programId: string, rewardId: string, body: Partial<LoyaltyReward> & { applyToExistingCustomers?: boolean }) => Promise<void>
+  deleteReward: (programId: string, rewardId: string, applyToExistingCustomers?: boolean) => Promise<void>
 
   loadAnalytics: (programId: string, startDate: string, endDate: string) => Promise<void>
   loadAnomalies: (programId: string) => Promise<void>
@@ -242,9 +246,9 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     await get().loadRewards(programId)
   },
 
-  deleteReward: async (programId, rewardId) => {
+  deleteReward: async (programId, rewardId, applyToExistingCustomers) => {
     const requestGeneration = get().requestGeneration
-    await api.delete(`/api/v1/loyalty/programs/${programId}/rewards/${rewardId}`)
+    await api.delete(`/api/v1/loyalty/programs/${programId}/rewards/${rewardId}`, { applyToExistingCustomers })
     if (get().requestGeneration !== requestGeneration) return
     set(s => ({ rewards: s.rewards.filter(r => r.id !== rewardId) }))
   },

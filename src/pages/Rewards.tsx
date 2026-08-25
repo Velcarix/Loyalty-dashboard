@@ -51,6 +51,12 @@ export function Rewards() {
   const [saving, setSaving] = useState(false)
   const [restricted, setRestricted] = useState(false)
   const [eligibility, setEligibility] = useState<AudienceFilter>({})
+  // Si se marca, el cambio (crear/editar/borrar) se propaga a los clientes
+  // que ya tienen wallet — ver LoyaltyCustomerRewardTier en el backend. Si
+  // no, solo afecta wallets nuevas de aquí en adelante.
+  const [applyToExisting, setApplyToExisting] = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleteApplyExisting, setDeleteApplyExisting] = useState(false)
 
   const program = programId ? getProgram(programId)?.program : null
   const customFieldOptions = program?.customFields ?? []
@@ -68,6 +74,7 @@ export function Rewards() {
     setForm(FORM_DEFAULTS)
     setRestricted(false)
     setEligibility({})
+    setApplyToExisting(false)
     setShowForm(true)
   }
 
@@ -82,6 +89,7 @@ export function Rewards() {
     })
     setRestricted(!!r.eligibility)
     setEligibility(r.eligibility ?? {})
+    setApplyToExisting(false)
     setShowForm(true)
   }
 
@@ -93,6 +101,7 @@ export function Rewards() {
         type: form.type, name: form.name.trim(), description: form.description.trim(),
         pointsRequired: parseInt(form.pointsRequired) || 0, config: buildConfig(form),
         eligibility: restricted ? eligibility : null,
+        applyToExistingCustomers: applyToExisting,
       }
       if (editing) await updateReward(programId, editing.id, body)
       else await createReward(programId, body)
@@ -100,6 +109,13 @@ export function Rewards() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleConfirmDelete(rewardId: string) {
+    if (!programId) return
+    await deleteReward(programId, rewardId, deleteApplyExisting)
+    setConfirmDeleteId(null)
+    setDeleteApplyExisting(false)
   }
 
   return (
@@ -177,6 +193,18 @@ export function Rewards() {
             )}
           </div>
 
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <label className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-700">Aplicar a usuarios actuales</span>
+              <input type="checkbox" checked={applyToExisting} onChange={e => setApplyToExisting(e.target.checked)} className="h-4 w-4 accent-primary" />
+            </label>
+            <p className="mt-1 text-xs text-gray-400">
+              {applyToExisting
+                ? 'Se actualiza también para los clientes que ya tienen wallet.'
+                : 'Solo aplica a wallets nuevas — los clientes actuales conservan lo que ya tenían.'}
+            </p>
+          </div>
+
           <div className="mt-4 flex gap-2">
             <button onClick={() => setShowForm(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Cancelar</button>
             <button onClick={handleSave} disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
@@ -207,10 +235,23 @@ export function Rewards() {
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
-                <button onClick={() => openEdit(r)} className="flex-1 rounded-lg bg-gray-50 py-1.5 text-xs font-semibold text-gray-700">Editar</button>
-                <button onClick={() => programId && deleteReward(programId, r.id)} className="flex-1 rounded-lg bg-red-50 py-1.5 text-xs font-semibold text-red-600">Eliminar</button>
-              </div>
+              {confirmDeleteId === r.id ? (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <label className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gray-700">Aplicar también a usuarios actuales</span>
+                    <input type="checkbox" checked={deleteApplyExisting} onChange={e => setDeleteApplyExisting(e.target.checked)} className="h-4 w-4 accent-primary" />
+                  </label>
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => { setConfirmDeleteId(null); setDeleteApplyExisting(false) }} className="flex-1 rounded-lg bg-gray-50 py-1.5 text-xs font-semibold text-gray-700">Cancelar</button>
+                    <button onClick={() => handleConfirmDelete(r.id)} className="flex-1 rounded-lg bg-red-50 py-1.5 text-xs font-semibold text-red-600">Confirmar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex gap-2 border-t border-gray-100 pt-3">
+                  <button onClick={() => openEdit(r)} className="flex-1 rounded-lg bg-gray-50 py-1.5 text-xs font-semibold text-gray-700">Editar</button>
+                  <button onClick={() => setConfirmDeleteId(r.id)} className="flex-1 rounded-lg bg-red-50 py-1.5 text-xs font-semibold text-red-600">Eliminar</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

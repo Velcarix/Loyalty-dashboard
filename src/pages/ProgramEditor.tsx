@@ -218,6 +218,10 @@ export function ProgramEditor() {
   const posLinked = useAuthStore(s => s.posLink?.linked ?? false)
   const { programs, loadPrograms, createProgram, updateProgram } = useProgramsStore()
   const [form, setForm] = useState<Form>(DEFAULTS)
+  // Solo aplica al editar el premio base de un programa "visits" existente
+  // (un programa nuevo no tiene clientes todavía) — ver checkbox junto a
+  // "Visitas para ganar el premio".
+  const [applyToExisting, setApplyToExisting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [isCheckingProgramLimit, setIsCheckingProgramLimit] = useState(() => !isEditing && programs.length === 0)
@@ -486,7 +490,8 @@ export function ProgramEditor() {
         businessInfo: buildBusinessInfo(),
       }
       if (isEditing && programId) {
-        await updateProgram(programId, programData, buildConfig())
+        const config = buildConfig()
+        await updateProgram(programId, programData, form.type === 'visits' ? { ...config, applyToExistingCustomers: applyToExisting } : config)
         navigate(`/programas/${programId}`)
       } else {
         const created = await createProgram({
@@ -872,10 +877,21 @@ export function ProgramEditor() {
                   <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Premio</span><input required value={form.rewardDescription} onChange={e => setForm(f => ({ ...f, rewardDescription: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Café americano gratis" /></label>
                 </div>
                 {isEditing && programId && (
-                  <p className="text-xs leading-5 text-slate-500">
-                    ¿Quieres más de un nivel de premio (ej. 5 visitas → café, 10 → postre)? Agrega niveles adicionales en{' '}
-                    <Link to={`/programas/${programId}/rewards`} className="font-semibold text-primary hover:underline">Recompensas</Link>.
-                  </p>
+                  <>
+                    <p className="text-xs leading-5 text-slate-500">
+                      ¿Quieres más de un nivel de premio (ej. 5 visitas → café, 10 → postre)? Agrega niveles adicionales en{' '}
+                      <Link to={`/programas/${programId}/rewards`} className="font-semibold text-primary hover:underline">Recompensas</Link>.
+                    </p>
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
+                      <span className="text-sm font-semibold text-slate-700">Aplicar a usuarios actuales</span>
+                      <input type="checkbox" checked={applyToExisting} onChange={e => setApplyToExisting(e.target.checked)} className="h-4 w-4 accent-primary" />
+                    </label>
+                    <p className="text-xs leading-5 text-slate-500">
+                      {applyToExisting
+                        ? 'La meta/premio nuevos se actualizan también para los clientes que ya tienen wallet.'
+                        : 'Solo aplica a wallets nuevas — los clientes actuales conservan la meta/premio con la que ya venían.'}
+                    </p>
+                  </>
                 )}
                 <div>
                   <p className="mb-2 text-sm font-semibold text-slate-700">Formato de progreso</p>

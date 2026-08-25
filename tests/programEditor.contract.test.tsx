@@ -189,6 +189,7 @@ describe('ProgramEditor configuration handoff', () => {
         rewardDescription: 'Café gratis',
         maxVisitsPerDay: 2,
         visualStyle: 'stamp',
+        applyToExistingCustomers: false,
       },
     )
   })
