@@ -107,7 +107,8 @@ export function Rewards() {
       {isVisitsProgram && (
         <p className="mb-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-500">
           El nivel base (meta y premio principal) se configura en <strong>Editar → Reglas y recompensa</strong>.
-          Agrega aquí niveles adicionales para varios premios por cantidad de visitas (ej. 10 visitas → postre, 20 → producto especial).
+          Agrega aquí niveles adicionales para varios premios por cantidad de visitas — pueden requerir menos o más
+          visitas que el premio principal (ej. 2 visitas → 20% descuento, 20 visitas → producto especial).
         </p>
       )}
       <div className="mb-4 flex justify-end">
