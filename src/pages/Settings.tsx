@@ -4,6 +4,10 @@ import { Icon } from '@/components/Icon'
 import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 
+const FRONTEND_URL = (import.meta.env.VITE_PUBLIC_FRONTEND_URL as string | undefined) ?? 'https://joinloyalty.copopos.com'
+const MOSTRADOR_URL = `${FRONTEND_URL}/mostrador`
+const MOSTRADOR_LABEL = MOSTRADOR_URL.replace(/^https?:\/\//, '')
+
 type MostradorDevice = {
   id: string
   label: string | null
@@ -105,7 +109,7 @@ function PairingQr({ code }: { code: string }) {
     if (!canvasRef.current || !code) return
     let cancelled = false
     setFailed(false)
-    void QRCode.toCanvas(canvasRef.current, `https://mostrador.copopos.com/#code=${code}`, {
+    void QRCode.toCanvas(canvasRef.current, `${MOSTRADOR_URL}#code=${code}`, {
       width: 172,
       margin: 1,
       color: { dark: '#0B132B', light: '#FFFFFF' },
@@ -453,7 +457,7 @@ export function Settings() {
                     <p className="mt-3 font-mono text-4xl font-extrabold tracking-[.18em] text-signal" aria-label={`Código ${mostradorPairing.code}`}>{formatPairingCode(mostradorPairing.code)}</p>
                     <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-100"><span className="h-2 w-2 rounded-full bg-signal" aria-hidden="true" />Expira en {pairingMinutes}:{pairingSeconds}</p>
                   </div>
-                  <p className="mx-auto mt-5 max-w-[28ch] text-sm leading-6 text-slate-600">En el teléfono, abre <strong className="text-slate-900">mostrador.copopos.com</strong> y teclea este código.</p>
+                  <p className="mx-auto mt-5 max-w-[28ch] text-sm leading-6 text-slate-600">En el teléfono, abre <strong className="text-slate-900">{MOSTRADOR_LABEL}</strong> y teclea este código.</p>
                   <div className="mt-5"><PairingQr code={mostradorPairing.code} /></div>
                   <p className="mx-auto mt-3 flex max-w-[31ch] items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-left text-xs font-semibold leading-5 text-amber-800"><Icon name="shield" size={16} className="mt-0.5 shrink-0" />Este código autoriza un teléfono. No lo compartas.</p>
                 </div>
