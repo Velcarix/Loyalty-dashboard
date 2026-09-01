@@ -43,6 +43,7 @@ interface ProgramsState {
     data: Partial<LoyaltyProgram>,
     config?: (Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) & { applyToExistingCustomers?: boolean },
   ) => Promise<void>
+  updateProgramBanner: (programId: string, file: File) => Promise<void>
   toggleProgram: (programId: string, isActive: boolean) => Promise<void>
 
   loadCustomers: (programId: string) => Promise<void>
@@ -157,6 +158,17 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
       programs: s.programs.map(p => p.program.id === programId
         ? { ...p, program: savedProgram, config: savedConfig ?? p.config }
         : p),
+    }))
+  },
+
+  updateProgramBanner: async (programId, file) => {
+    const requestGeneration = get().requestGeneration
+    const body = new FormData()
+    body.append('file', file)
+    const updated = await api.uploadFile<LoyaltyProgram>(`/api/v1/loyalty/programs/${programId}/banner`, body)
+    if (get().requestGeneration !== requestGeneration) return
+    set(s => ({
+      programs: s.programs.map(p => p.program.id === programId ? { ...p, program: updated } : p),
     }))
   },
 

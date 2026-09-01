@@ -16,89 +16,8 @@ import {
   type PassTemplate,
 } from '@/lib/passDesign'
 import { buildVisitsConfig } from '@/lib/programConfig'
+import { BANNER_RULES, LOGO_RULES, STAMP_RULES, validateImage } from '@/lib/imageValidation'
 import type { LoyaltyVisitsConfig, LoyaltyProgram, LoyaltyBusinessInfo } from '@/types/loyalty'
-
-// Mismas reglas que backend/src/services/image-upload.service.ts — se validan
-// aquí primero para que el usuario vea el error de inmediato, no tras subir.
-interface ImageRules {
-  maxBytes: number
-  formats: string[]
-  minWidth?: number
-  minHeight?: number
-  requireAlpha?: boolean
-  aspect?: { width: number; height: number; tolerance: number }
-}
-
-const LOGO_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png'], minWidth: 480, minHeight: 150, requireAlpha: true }
-const BANNER_RULES: ImageRules = { maxBytes: 2 * 1024 * 1024, formats: ['image/png', 'image/jpeg'], aspect: { width: 1125, height: 432, tolerance: 0.15 } }
-const STAMP_RULES: ImageRules = { maxBytes: 1024 * 1024, formats: ['image/png', 'image/jpeg'], minWidth: 64, minHeight: 64 }
-
-// Firma binaria real de los primeros bytes — no basta con file.type (lo infiere
-// el navegador de la extensión) ni con el nombre del archivo: alguien puede
-// renombrar cualquier cosa a "logo.png".
-async function detectImageFormat(file: File): Promise<'image/png' | 'image/jpeg' | null> {
-  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
-  if (head.length >= 8
-    && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4E && head[3] === 0x47
-    && head[4] === 0x0D && head[5] === 0x0A && head[6] === 0x1A && head[7] === 0x0A) {
-    return 'image/png'
-  }
-  if (head.length >= 3 && head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF) {
-    return 'image/jpeg'
-  }
-  return null
-}
-
-async function readImageInfo(file: File): Promise<{ width: number; height: number; hasAlpha: boolean }> {
-  const bitmap = await createImageBitmap(file)
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return { width: bitmap.width, height: bitmap.height, hasAlpha: true }
-    ctx.drawImage(bitmap, 0, 0)
-    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
-    let hasAlpha = false
-    for (let i = 3; i < data.length; i += 4) {
-      if (data[i] < 255) { hasAlpha = true; break }
-    }
-    return { width: bitmap.width, height: bitmap.height, hasAlpha }
-  } finally {
-    bitmap.close()
-  }
-}
-
-async function validateImage(file: File, rules: ImageRules): Promise<string | null> {
-  const allowedLabel = rules.formats.map(f => f.replace('image/', '').toUpperCase()).join(' o ')
-  const detectedFormat = await detectImageFormat(file)
-  if (!detectedFormat) {
-    return `El archivo no es un ${allowedLabel} válido — su contenido no coincide con ninguno de esos formatos, aunque el nombre lo diga`
-  }
-  if (!rules.formats.includes(detectedFormat)) {
-    return `El archivo es en realidad ${detectedFormat === 'image/png' ? 'PNG' : 'JPG'}, pero aquí se necesita ${allowedLabel}`
-  }
-  if (file.size > rules.maxBytes) {
-    return `El archivo pesa más de ${(rules.maxBytes / 1024 / 1024).toFixed(0)} MB`
-  }
-  let info: { width: number; height: number; hasAlpha: boolean }
-  try {
-    info = await readImageInfo(file)
-  } catch {
-    return 'No se pudo leer la imagen — intenta con otro archivo'
-  }
-  if (rules.minWidth && info.width < rules.minWidth) return `Debe medir al menos ${rules.minWidth}px de ancho (subiste ${info.width}px)`
-  if (rules.minHeight && info.height < rules.minHeight) return `Debe medir al menos ${rules.minHeight}px de alto (subiste ${info.height}px)`
-  if (rules.requireAlpha && !info.hasAlpha) return 'Debe tener transparencia (canal alfa) — el fondo no puede ser sólido'
-  if (rules.aspect) {
-    const targetRatio = rules.aspect.width / rules.aspect.height
-    const actualRatio = info.height > 0 ? info.width / info.height : 0
-    if (Math.abs(actualRatio - targetRatio) / targetRatio > rules.aspect.tolerance) {
-      return `La proporción debe ser cercana a ${rules.aspect.width}×${rules.aspect.height} (subiste ${info.width}×${info.height})`
-    }
-  }
-  return null
-}
 
 interface Form {
   programName: string
@@ -107,12 +26,6 @@ interface Form {
   logoUrl: string
   bannerUrl: string
   saldoLabel: string
-  businessTerms: string
-  businessPhone: string
-  businessAddress: string
-  businessWebsite: string
-  businessInstagram: string
-  businessFacebook: string
   design: LoyaltyBusinessInfo['design']
   visitsTarget: string
   rewardDescription: string
@@ -129,12 +42,6 @@ const DEFAULTS: Form = {
   logoUrl: '',
   bannerUrl: '',
   saldoLabel: '',
-  businessTerms: '',
-  businessPhone: '',
-  businessAddress: '',
-  businessWebsite: '',
-  businessInstagram: '',
-  businessFacebook: '',
   design: DEFAULT_PASS_DESIGN,
   visitsTarget: '10',
   rewardDescription: '',
@@ -142,6 +49,16 @@ const DEFAULTS: Form = {
   visitsVisualStyle: 'number',
   stampImageUrl: '',
   stampEmptyImageUrl: '',
+}
+
+// Único mapa de nombres de zona, compartido por el encabezado "Editando: X"
+// y por los tabs de navegación — antes vivían duplicados en cada uso.
+const ZONE_LABELS: Record<PassAppearanceZone, string> = {
+  background: 'Fondo',
+  identity: 'Logo y encabezado',
+  progress: 'Contador',
+  stamps: 'Sellos',
+  reward: 'Premio',
 }
 
 interface PendingFile {
@@ -369,12 +286,6 @@ export function ProgramEditor() {
       logoUrl: program.logoUrl ?? '',
       bannerUrl: program.bannerUrl ?? '',
       saldoLabel: program.saldoLabel ?? '',
-      businessTerms: program.businessInfo?.terms ?? '',
-      businessPhone: program.businessInfo?.phone ?? '',
-      businessAddress: program.businessInfo?.address ?? '',
-      businessWebsite: program.businessInfo?.website ?? '',
-      businessInstagram: program.businessInfo?.socials?.instagram ?? '',
-      businessFacebook: program.businessInfo?.socials?.facebook ?? '',
       design: normalizePassDesign(program.businessInfo?.design),
       visitsTarget: vc?.visitsTarget?.toString() ?? DEFAULTS.visitsTarget,
       rewardDescription: vc?.rewardDescription ?? '',
@@ -399,23 +310,8 @@ export function ProgramEditor() {
     })
   }
 
-  function normalizeWebsite(value: string): string | undefined {
-    const trimmed = value.trim()
-    if (!trimmed) return undefined
-    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  }
-
   function buildBusinessInfo(): LoyaltyBusinessInfo {
-    const hasSocials = !!(form.businessInstagram || form.businessFacebook)
     return {
-      terms: form.businessTerms || undefined,
-      phone: form.businessPhone || undefined,
-      address: form.businessAddress || undefined,
-      website: normalizeWebsite(form.businessWebsite),
-      socials: hasSocials ? {
-        instagram: form.businessInstagram || undefined,
-        facebook: form.businessFacebook || undefined,
-      } : undefined,
       design: normalizePassDesign(form.design),
     }
   }
@@ -566,10 +462,29 @@ export function ProgramEditor() {
             </div>
           </section>
 
-          <section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><Icon name="clipboard" size={18} /></span>
+              <div><p className="text-sm font-bold text-slate-950">3. Detalles del programa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Cómo se llama tu programa y qué ve el cliente antes de unirse.</p></div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Nombre del programa</label>
+                <input required maxLength={30} value={form.programName} onChange={e => setForm(f => ({ ...f, programName: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Copo Rewards" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Descripción corta</label>
+                <input required maxLength={60} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Junta 10 visitas y gánate un café" />
+              </div>
+            </div>
+          </section>
+
+          <section id="diseno-tarjeta" className="scroll-mt-6">
             <div className="mb-4 flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><Icon name="sparkles" size={18} /></span>
-              <div><p className="text-sm font-bold text-slate-950">3. Diseño de la tarjeta</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Elige una composición y toca la tarjeta para editar cada zona segura.</p></div>
+              <div><p className="text-sm font-bold text-slate-950">4. Diseño de la tarjeta</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Elige una plantilla y edita cada zona — tócala aquí o directo en la vista previa.</p></div>
             </div>
             <div className="space-y-4">
               <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3 sm:p-4">
@@ -600,24 +515,71 @@ export function ProgramEditor() {
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4" aria-live="polite">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">Editando: {({ background: 'Fondo', identity: 'Logo y encabezado', progress: 'Contador', stamps: 'Sellos', reward: 'Premio' } as const)[selectedAppearanceZone]}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">También puedes tocar esa zona en la vista previa.</p>
-                  </div>
-                  <button type="button" onClick={() => setSelectedAppearanceZone('background')} className="min-h-11 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary/30">Ver fondo</button>
+                <div className="mb-3">
+                  <p className="text-sm font-bold text-slate-900">Editando: {ZONE_LABELS[selectedAppearanceZone]}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">También puedes tocar esa zona en la vista previa.</p>
+                </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {(Object.keys(ZONE_LABELS) as PassAppearanceZone[]).map(zone => (
+                    <button
+                      key={zone}
+                      type="button"
+                      aria-pressed={selectedAppearanceZone === zone}
+                      onClick={() => setSelectedAppearanceZone(zone)}
+                      className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${selectedAppearanceZone === zone ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                    >
+                      {ZONE_LABELS[zone]}
+                    </button>
+                  ))}
                 </div>
 
                 {selectedAppearanceZone === 'background' && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="rounded-xl border border-slate-200 p-3">
-                      <span className="mb-2 block text-xs font-bold text-slate-600">Color principal</span>
-                      <span className="flex items-center gap-2"><input type="color" aria-label="Color principal de la tarjeta" value={brandColorInput} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{brandColorInput}</span></span>
-                    </label>
-                    <label className="rounded-xl border border-slate-200 p-3">
-                      <span className="mb-2 block text-xs font-bold text-slate-600">Color de acento</span>
-                      <span className="flex items-center gap-2"><input type="color" aria-label="Color de acento de la tarjeta" value={passDesign.accentColor} onChange={e => updatePassDesign({ accentColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.accentColor}</span></span>
-                    </label>
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="rounded-xl border border-slate-200 p-3">
+                        <span className="mb-2 block text-xs font-bold text-slate-600">Color principal</span>
+                        <span className="flex items-center gap-2"><input type="color" aria-label="Color principal de la tarjeta" value={brandColorInput} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{brandColorInput}</span></span>
+                      </label>
+                      <label className="rounded-xl border border-slate-200 p-3">
+                        <span className="mb-2 block text-xs font-bold text-slate-600">Color de acento</span>
+                        <span className="flex items-center gap-2"><input type="color" aria-label="Color de acento de la tarjeta" value={passDesign.accentColor} onChange={e => updatePassDesign({ accentColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.accentColor}</span></span>
+                      </label>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-xs font-bold text-slate-600">Estilo de fondo</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        {([
+                          ['solid', 'Color pleno', 'layout'],
+                          ['gradient', 'Degradado', 'sparkles'],
+                          ['banner', 'Con banner', 'image'],
+                        ] as const).map(([style, title, icon]) => (
+                          <button key={style} type="button" aria-pressed={passDesign.cardStyle === style} onClick={() => updatePassDesign({ cardStyle: style })}
+                            className={`min-h-11 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${passDesign.cardStyle === style ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                            <Icon name={icon} size={15} className="mb-1" /><span className="block text-xs font-semibold">{title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="mb-1.5 flex items-baseline justify-between gap-3"><p className="text-xs font-bold text-slate-600">Paleta lista para usar</p><span className="text-[11px] text-slate-400">Puedes personalizarla después</span></div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {BRAND_PRESETS.map(preset => {
+                          const isSelected = form.brandColor === preset.brandColor && passDesign.accentColor === preset.accentColor
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => setForm(f => ({ ...f, brandColor: preset.brandColor, design: { ...passDesign, accentColor: preset.accentColor, cardStyle: preset.cardStyle } }))}
+                              className={`min-h-11 rounded-lg border p-2 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${isSelected ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}
+                            >
+                              <span className="mb-1 flex h-4 overflow-hidden rounded"><span className="w-1/2" style={{ backgroundColor: preset.brandColor }} /><span className="w-1/2" style={{ backgroundColor: preset.accentColor }} /></span>
+                              <span className="block text-[11px] font-bold text-slate-800">{preset.name}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -634,6 +596,10 @@ export function ProgramEditor() {
                   <div className="space-y-3">
                     <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">Etiqueta visible</span><input maxLength={12} value={form.saldoLabel} onChange={e => setForm(f => ({ ...f, saldoLabel: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Visitas" /></label>
                     <div className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={form.visitsVisualStyle === 'number'} onClick={() => handleVisitsVisualStyle('number')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'number' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Número</button><button type="button" aria-pressed={form.visitsVisualStyle === 'stamp'} onClick={() => handleVisitsVisualStyle('stamp')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Sellos</button></div>
+                    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                      <input type="checkbox" checked={passDesign.showMemberName} onChange={e => updatePassDesign({ showMemberName: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
+                      <span><span className="block font-semibold">Mostrar nombre del cliente</span><span className="text-xs text-slate-500">Aparece en la tarjeta, debajo del progreso y el premio.</span></span>
+                    </label>
                     <p className="text-xs leading-5 text-slate-500">La cifra, la meta y el progreso real vienen de Loyalty y no se pueden editar aquí.</p>
                   </div>
                 )}
@@ -675,123 +641,29 @@ export function ProgramEditor() {
                       <p className="mt-1.5 text-xs leading-5 text-slate-500">Deja este campo vacío para conservar el fondo automático actual; escribe un HEX para usar un color propio (ej. un azul más oscuro que el fondo general).</p>
                     </div>
                     {hasLowStampContrast && <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Los sellos podrían perderse sobre este fondo. Usa un color con mayor contraste.</p>}
+                    <div className="border-t border-slate-100 pt-3">
+                      <span className="mb-1 flex items-center justify-between text-xs font-bold text-slate-600"><span>Cómo le llamas a un sello</span><span className="font-normal text-slate-400">{(passDesign.terminology.stampSingular ?? '').length}/20</span></span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input maxLength={20} value={passDesign.terminology.stampSingular ?? ''} onChange={e => updatePassDesign({ terminology: { ...passDesign.terminology, stampSingular: e.target.value } })} placeholder="visita" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                        <input maxLength={20} value={passDesign.terminology.stampPlural ?? ''} onChange={e => updatePassDesign({ terminology: { ...passDesign.terminology, stampPlural: e.target.value } })} placeholder="visitas" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {selectedAppearanceZone === 'reward' && (
-                  <div className="space-y-3"><label className="block rounded-xl border border-slate-200 p-3"><span className="mb-2 block text-xs font-bold text-slate-600">Color del bloque de premio</span><span className="flex items-center gap-2"><input type="color" aria-label="Color del bloque de premio" value={passDesign.rewardColor} onChange={e => updatePassDesign({ rewardColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.rewardColor}</span></span></label><p className="text-xs leading-5 text-slate-500">El contenido del premio se define en Reglas y recompensa; su disponibilidad se mantiene protegida.</p></div>
+                  <div className="space-y-3">
+                    <label className="block rounded-xl border border-slate-200 p-3"><span className="mb-2 block text-xs font-bold text-slate-600">Color del bloque de premio</span><span className="flex items-center gap-2"><input type="color" aria-label="Color del bloque de premio" value={passDesign.rewardColor} onChange={e => updatePassDesign({ rewardColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.rewardColor}</span></span></label>
+                    <p className="text-xs leading-5 text-slate-500">El contenido del premio se define en Reglas y recompensa; su disponibilidad se mantiene protegida.</p>
+                    <div className="border-t border-slate-100 pt-3">
+                      <span className="mb-1 flex items-center justify-between text-xs font-bold text-slate-600"><span>Cómo le llamas a un premio</span><span className="font-normal text-slate-400">{(passDesign.terminology.rewardSingular ?? '').length}/20</span></span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input maxLength={20} value={passDesign.terminology.rewardSingular ?? ''} onChange={e => updatePassDesign({ terminology: { ...passDesign.terminology, rewardSingular: e.target.value } })} placeholder="premio" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                        <input maxLength={20} value={passDesign.terminology.rewardPlural ?? ''} onChange={e => updatePassDesign({ terminology: { ...passDesign.terminology, rewardPlural: e.target.value } })} placeholder="premios" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">Nombre del programa</label>
-                  <input required maxLength={30} value={form.programName} onChange={e => setForm(f => ({ ...f, programName: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Copo Rewards" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">Etiqueta del saldo</label>
-                  <input maxLength={12} value={form.saldoLabel} onChange={e => setForm(f => ({ ...f, saldoLabel: e.target.value }))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-                    placeholder="Visitas" />
-                  <p className="mt-1 text-xs text-slate-400">Máx. 12 caracteres; si queda vacío usamos el nombre predeterminado.</p>
-                </div>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Descripción corta</label>
-                <input required maxLength={60} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Junta 10 visitas y gánate un café" />
-              </div>
-
-              <div>
-                <div className="mb-2 flex items-baseline justify-between gap-3"><label className="text-sm font-semibold text-slate-700">Paleta lista para usar</label><span className="text-xs text-slate-400">Puedes personalizarla después</span></div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {BRAND_PRESETS.map(preset => {
-                    const isSelected = form.brandColor === preset.brandColor && passDesign.accentColor === preset.accentColor
-                    return (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => setForm(f => ({ ...f, brandColor: preset.brandColor, design: { ...passDesign, accentColor: preset.accentColor, cardStyle: preset.cardStyle } }))}
-                        className={`rounded-xl border p-2.5 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${isSelected ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}
-                      >
-                        <span className="mb-2 flex h-7 overflow-hidden rounded-lg"><span className="w-1/2" style={{ backgroundColor: preset.brandColor }} /><span className="w-1/2" style={{ backgroundColor: preset.accentColor }} /></span>
-                        <span className="block text-xs font-bold text-slate-800">{preset.name}</span>
-                        <span className="mt-0.5 block text-[11px] text-slate-500">{preset.description}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="rounded-xl border border-slate-200 bg-white p-3">
-                  <span className="mb-2 block text-xs font-bold text-slate-600">Color principal</span>
-                  <span className="flex items-center gap-2">
-                    <input type="color" aria-label="Color principal" value={brandColorInput} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
-                    <input value={form.brandColor} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="min-w-0 flex-1 bg-transparent font-mono text-xs uppercase text-slate-700 outline-none" aria-label="Código hexadecimal del color principal" />
-                  </span>
-                </label>
-                <label className="rounded-xl border border-slate-200 bg-white p-3">
-                  <span className="mb-2 block text-xs font-bold text-slate-600">Color de acento</span>
-                  <span className="flex items-center gap-2">
-                    <input type="color" aria-label="Color de acento" value={passDesign.accentColor} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, accentColor: e.target.value } }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
-                    <span className="font-mono text-xs uppercase text-slate-700">{passDesign.accentColor}</span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                {([
-                  ['solid', 'Color pleno', 'Un frente claro y directo', 'layout'],
-                  ['gradient', 'Degradado', 'Más profundidad de marca', 'sparkles'],
-                  ['banner', 'Con banner', 'La imagen toma protagonismo', 'image'],
-                ] as const).map(([style, title, description, icon]) => (
-                  <button key={style} type="button" aria-pressed={passDesign.cardStyle === style} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, cardStyle: style } }))}
-                    className={`rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${passDesign.cardStyle === style ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}>
-                    <Icon name={icon} size={17} className="mb-3 text-primary" /><span className="block text-xs font-bold text-slate-800">{title}</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">{description}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="mb-1.5 text-xs font-bold text-slate-600">Tratamiento del logo</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['plate', 'minimal'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.logoStyle === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, logoStyle: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.logoStyle === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{option === 'plate' ? 'En placa' : 'Minimalista'}</button>)}
-                  </div>
-                </div>
-                {form.visitsVisualStyle === 'stamp' && <div>
-                  <p className="mb-1.5 text-xs font-bold text-slate-600">Forma de los sellos</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['circle', 'rounded', 'square', 'none'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, stampShape: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{{ circle: 'Circular', rounded: 'Redondeado', square: 'Cuadrado', none: 'Sin contenedor' }[option]}</button>)}
-                  </div>
-                </div>}
-              </div>
-
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
-                <input type="checkbox" checked={passDesign.showMemberName} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, showMemberName: e.target.checked } }))} className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" />
-                <span><span className="block font-semibold">Mostrar nombre del cliente</span><span className="text-xs text-slate-500">Aparece en la tarjeta, siempre debajo del progreso y el premio.</span></span>
-              </label>
-
-              <div>
-                <p className="mb-1.5 text-xs font-bold text-slate-600">Cómo le llamas a...</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <label>
-                      <span className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Sello (singular / plural)</span><span>{(passDesign.terminology.stampSingular ?? '').length}/20</span></span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input maxLength={20} value={passDesign.terminology.stampSingular ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, stampSingular: e.target.value } } }))} placeholder="visita" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
-                        <input maxLength={20} value={passDesign.terminology.stampPlural ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, stampPlural: e.target.value } } }))} placeholder="visitas" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
-                      </div>
-                    </label>
-                    <label>
-                      <span className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Premio (singular / plural)</span><span>{(passDesign.terminology.rewardSingular ?? '').length}/20</span></span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input maxLength={20} value={passDesign.terminology.rewardSingular ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, rewardSingular: e.target.value } } }))} placeholder="premio" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
-                        <input maxLength={20} value={passDesign.terminology.rewardPlural ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, rewardPlural: e.target.value } } }))} placeholder="premios" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
-                      </div>
-                    </label>
-                </div>
               </div>
             </div>
           </section>
@@ -799,7 +671,7 @@ export function ProgramEditor() {
           <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
             <div className="mb-4 flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700"><Icon name="gift" size={18} /></span>
-              <div><p className="text-sm font-bold text-slate-950">4. Reglas y recompensa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Define una meta clara para el cliente y límites seguros para tu operación.</p></div>
+              <div><p className="text-sm font-bold text-slate-950">5. Reglas y recompensa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Define una meta clara para el cliente y límites seguros para tu operación.</p></div>
             </div>
             <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -823,19 +695,10 @@ export function ProgramEditor() {
                     </p>
                   </>
                 )}
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-slate-700">Formato de progreso</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" aria-pressed={form.visitsVisualStyle === 'number'} onClick={() => handleVisitsVisualStyle('number')} className={`rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${form.visitsVisualStyle === 'number' ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}><Icon name="chart" size={17} className="mb-2 text-primary" /><p className="text-sm font-bold text-slate-800">Número</p><p className="mt-1 text-xs text-slate-500">Ej: 3/10</p></button>
-                    <button type="button" aria-pressed={form.visitsVisualStyle === 'stamp'} onClick={() => handleVisitsVisualStyle('stamp')} className={`rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}><Icon name="check" size={17} className="mb-2 text-primary" /><p className="text-sm font-bold text-slate-800">Sellos</p><p className="mt-1 text-xs text-slate-500">Tarjeta visual personalizable</p></button>
-                  </div>
-                </div>
-                {form.visitsVisualStyle === 'stamp' && (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ImagePickerField label="Imagen del sello lleno" hint="PNG cuadrado o circular, fondo transparente, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
-                    <ImagePickerField label="Imagen del sello vacío" hint="Opcional. Ícono para la casilla sin ganar" previewUrl={stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null)} uploading={uploadingStampEmpty} error={stampEmptyError} onPick={handlePickStampEmpty} />
-                  </div>
-                )}
+                <p className="text-xs leading-5 text-slate-500">
+                  El formato del contador (número o sellos) y las imágenes de sello se eligen en{' '}
+                  <a href="#diseno-tarjeta" onClick={() => setSelectedAppearanceZone('progress')} className="font-semibold text-primary hover:underline">Diseño de la tarjeta → Contador</a>.
+                </p>
               </div>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">Máximo de acumulaciones por día</label>
@@ -844,31 +707,6 @@ export function ProgramEditor() {
               </select>
             </div>
           </section>
-
-          <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <summary className="flex cursor-pointer list-none items-center gap-3 text-sm font-bold text-slate-950 [&::-webkit-details-marker]:hidden">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-primary shadow-sm"><Icon name="clipboard" size={16} /></span>
-              Información y términos del negocio
-              <Icon name="chevron-down" size={16} className="ml-auto text-slate-400" />
-            </summary>
-            <p className="mb-3 mt-3 text-xs leading-5 text-slate-500">Opcional. Ayuda a que el cliente encuentre tus términos, contacto y redes desde su tarjeta.</p>
-            <div className="space-y-2.5">
-              <input value={form.businessTerms} onChange={e => setForm(f => ({ ...f, businessTerms: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Términos y condiciones" />
-              <input value={form.businessPhone} onChange={e => setForm(f => ({ ...f, businessPhone: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Teléfono" />
-              <input value={form.businessAddress} onChange={e => setForm(f => ({ ...f, businessAddress: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Dirección" />
-              <input value={form.businessWebsite} onChange={e => setForm(f => ({ ...f, businessWebsite: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Sitio web" />
-              <div className="grid grid-cols-2 gap-2.5">
-                <input value={form.businessInstagram} onChange={e => setForm(f => ({ ...f, businessInstagram: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="@instagram" />
-                <input value={form.businessFacebook} onChange={e => setForm(f => ({ ...f, businessFacebook: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="/facebook" />
-              </div>
-            </div>
-          </details>
 
           {error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700">{error}</p>}
           <button

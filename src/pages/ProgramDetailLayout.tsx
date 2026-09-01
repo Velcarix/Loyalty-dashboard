@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { RegistrationQrModal } from '@/components/RegistrationQrModal'
 import { Icon } from '@/components/Icon'
+import { BANNER_RULES, validateImage } from '@/lib/imageValidation'
 
 const tabs = [
   { to: '', label: 'Dashboard', end: true },
@@ -16,14 +17,34 @@ const tabs = [
 
 export function ProgramDetailLayout() {
   const { programId } = useParams<{ programId: string }>()
-  const { programs, loadPrograms, getProgram, toggleProgram } = useProgramsStore()
+  const { programs, loadPrograms, getProgram, toggleProgram, updateProgramBanner } = useProgramsStore()
   const program = programId ? getProgram(programId) : undefined
   const [qrVisible, setQrVisible] = useState(false)
   const [togglingActive, setTogglingActive] = useState(false)
+  const [bannerUploading, setBannerUploading] = useState(false)
+  const [bannerError, setBannerError] = useState<string | null>(null)
 
   useEffect(() => {
     if (programs.length === 0) void loadPrograms()
   }, [])
+
+  async function handlePickBanner(file: File) {
+    if (!programId) return
+    setBannerError(null)
+    const validationError = await validateImage(file, BANNER_RULES)
+    if (validationError) {
+      setBannerError(validationError)
+      return
+    }
+    setBannerUploading(true)
+    try {
+      await updateProgramBanner(programId, file)
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : 'No se pudo actualizar el banner')
+    } finally {
+      setBannerUploading(false)
+    }
+  }
 
   async function handleToggleActive() {
     if (!programId || !program) return
@@ -42,9 +63,31 @@ export function ProgramDetailLayout() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <Link to="/programas" className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-semibold text-primary transition hover:text-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/30"><Icon name="arrow-left" size={16} /> Programas</Link>
 
-      {bannerUrl && (
-        <div className="mt-4 h-28 w-full overflow-hidden rounded-2xl border border-slate-200 sm:h-36">
-          <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+      {program && (
+        <div className="mt-4">
+          <div className={`group relative h-28 w-full overflow-hidden rounded-2xl sm:h-36 ${bannerUrl ? 'border border-slate-200' : 'border-2 border-dashed border-slate-300 bg-slate-50'}`}>
+            {bannerUrl ? (
+              <img src={bannerUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
+                <Icon name="image" size={22} />
+                <span className="text-xs font-semibold">Sin banner</span>
+              </div>
+            )}
+            <label className="absolute bottom-2 right-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-950/70 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm backdrop-blur transition hover:bg-slate-950/85 focus-within:ring-2 focus-within:ring-white/60">
+              <Icon name={bannerUploading ? 'pause' : 'edit'} size={14} />
+              {bannerUploading ? 'Subiendo…' : bannerUrl ? 'Cambiar banner' : 'Agregar banner'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                disabled={bannerUploading}
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handlePickBanner(f); e.target.value = '' }}
+              />
+            </label>
+          </div>
+          <p className="mt-1 px-1 text-xs text-slate-400">PNG o JPG, proporción cercana a 1125×432px, máx. 2 MB.</p>
+          {bannerError && <p className="mt-1 px-1 text-xs text-red-600">{bannerError}</p>}
         </div>
       )}
 
