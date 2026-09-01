@@ -67,7 +67,7 @@ interface PendingFile {
 }
 
 function ImagePickerField({
-  label, hint, required, accept = 'image/png,image/jpeg', previewUrl, uploading, error, onPick,
+  label, hint, required, accept = 'image/png,image/jpeg', previewUrl, uploading, error, onPick, onRemove,
 }: {
   label: string
   hint: string
@@ -77,6 +77,7 @@ function ImagePickerField({
   uploading: boolean
   error: string | null
   onPick: (file: File) => void
+  onRemove?: () => void
 }) {
   return (
     <div>
@@ -103,6 +104,11 @@ function ImagePickerField({
         />
       </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {previewUrl && onRemove && (
+        <button type="button" onClick={onRemove} disabled={uploading} className="mt-1.5 text-xs font-semibold text-red-600 transition hover:underline disabled:opacity-50">
+          Quitar imagen
+        </button>
+      )}
     </div>
   )
 }
@@ -167,6 +173,39 @@ export function ProgramEditor() {
       setFieldError(err instanceof Error ? err.message : `No se pudo subir el ${kind === 'logo' ? 'logo' : 'banner'}`)
     } finally {
       setUploading(false)
+    }
+  }
+
+  // El logo es obligatorio, así que "Quitar" solo aplica a una imagen recién
+  // elegida y aún sin guardar — deshace la selección, no borra el logo activo.
+  function handleRemovePendingLogo() {
+    setLogoPending(null)
+    setLogoError(null)
+  }
+
+  // El banner es opcional: se puede quitar del todo. Si hay una selección
+  // pendiente, la descarta; si ya estaba guardado (edición), persiste el
+  // borrado con PUT bannerUrl:null — mismo patrón directo que la subida, sin
+  // pasar por updateProgram para no re-hidratar el formulario a medio editar.
+  async function handleRemoveBanner() {
+    setBannerError(null)
+    if (bannerPending) {
+      setBannerPending(null)
+      return
+    }
+    if (!form.bannerUrl) return
+    if (!isEditing || !programId) {
+      setForm(f => ({ ...f, bannerUrl: '' }))
+      return
+    }
+    setUploadingBanner(true)
+    try {
+      await api.put(`/api/v1/loyalty/programs/${programId}`, { bannerUrl: null })
+      setForm(f => ({ ...f, bannerUrl: '' }))
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : 'No se pudo quitar el banner')
+    } finally {
+      setUploadingBanner(false)
     }
   }
 
@@ -449,6 +488,7 @@ export function ProgramEditor() {
                 uploading={uploadingLogo}
                 error={logoError}
                 onPick={f => handlePickImage('logo', f)}
+                onRemove={logoPending ? handleRemovePendingLogo : undefined}
               />
               <ImagePickerField
                 label="Banner opcional"
@@ -458,6 +498,7 @@ export function ProgramEditor() {
                 uploading={uploadingBanner}
                 error={bannerError}
                 onPick={f => handlePickImage('banner', f)}
+                onRemove={handleRemoveBanner}
               />
             </div>
           </section>
