@@ -72,7 +72,7 @@ describe('Settings mostrador devices', () => {
 
     expect(api.post).toHaveBeenCalledWith('/api/v1/integrations/pos/mostrador/code', { label: 'Teléfono' })
     expect(container.textContent).toContain('0483 1927')
-    expect(container.textContent).toContain('mostrador.copopos.com')
+    expect(container.textContent).toContain('joinloyalty.copopos.com/mostrador')
     expect(container.textContent).toContain('No lo compartas.')
   })
 
