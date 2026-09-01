@@ -48,6 +48,8 @@ export function Rewards() {
   const [editing, setEditing] = useState<LoyaltyReward | null>(null)
   const [form, setForm] = useState<Form>(FORM_DEFAULTS)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [restricted, setRestricted] = useState(false)
   const [eligibility, setEligibility] = useState<AudienceFilter>({})
   // Si se marca, el cambio (crear/editar/borrar) se propaga a los clientes
@@ -69,6 +71,8 @@ export function Rewards() {
 
   function openCreate() {
     setEditing(null)
+    setError('')
+    setNotice('')
     setForm(FORM_DEFAULTS)
     setRestricted(false)
     setEligibility({})
@@ -78,6 +82,8 @@ export function Rewards() {
 
   function openEdit(r: LoyaltyReward) {
     setEditing(r)
+    setError('')
+    setNotice('')
     const c = r.config ?? {}
     setForm({
       type: r.type, name: r.name, description: r.description, pointsRequired: String(r.pointsRequired),
@@ -94,6 +100,10 @@ export function Rewards() {
   async function handleSave() {
     if (!programId) return
     setSaving(true)
+    setError('')
+    setNotice('')
+    const wasEditing = !!editing
+    const propagated = applyToExisting
     try {
       const body = {
         type: form.type, name: form.name.trim(), description: form.description.trim(),
@@ -104,6 +114,13 @@ export function Rewards() {
       if (editing) await updateReward(programId, editing.id, body)
       else await createReward(programId, body)
       setShowForm(false)
+      setNotice(
+        propagated
+          ? `Recompensa ${wasEditing ? 'guardada' : 'creada'}. Los clientes actuales se actualizarán en unos segundos.`
+          : `Recompensa ${wasEditing ? 'guardada' : 'creada'}.`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar la recompensa')
     } finally {
       setSaving(false)
     }
@@ -111,9 +128,21 @@ export function Rewards() {
 
   async function handleConfirmDelete(rewardId: string) {
     if (!programId) return
-    await deleteReward(programId, rewardId, deleteApplyExisting)
-    setConfirmDeleteId(null)
-    setDeleteApplyExisting(false)
+    setError('')
+    setNotice('')
+    const propagated = deleteApplyExisting
+    try {
+      await deleteReward(programId, rewardId, deleteApplyExisting)
+      setConfirmDeleteId(null)
+      setDeleteApplyExisting(false)
+      setNotice(
+        propagated
+          ? 'Recompensa eliminada. Se quitará de los clientes actuales en unos segundos.'
+          : 'Recompensa eliminada.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo eliminar la recompensa')
+    }
   }
 
   return (
@@ -128,6 +157,14 @@ export function Rewards() {
       <div className="mb-4 flex justify-end">
         <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">+ Nueva recompensa</button>
       </div>
+
+      {error && (
+        <p role="alert" className="mb-4 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">{error}</p>
+      )}
+
+      {notice && (
+        <p role="status" className="mb-4 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700">{notice}</p>
+      )}
 
       {showForm && (
         <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
@@ -198,7 +235,7 @@ export function Rewards() {
             </label>
             <p className="mt-1 text-xs text-gray-400">
               {applyToExisting
-                ? 'Se actualiza también para los clientes que ya tienen wallet.'
+                ? 'Al guardar, este cambio también se propaga a los clientes que ya tienen wallet (acción única de este guardado).'
                 : 'Solo aplica a wallets nuevas — los clientes actuales conservan lo que ya tenían.'}
             </p>
           </div>
