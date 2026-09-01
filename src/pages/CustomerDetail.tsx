@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
-import { useAuthStore } from '@/store/authStore'
 
 // birthdayDate viene del API como fecha/hora completa (ej. "1993-02-02T00:00:00.000Z")
 // porque un Date de JS siempre serializa así — <input type="date"> exige
@@ -14,11 +13,7 @@ function toDateInputValue(value: string | null | undefined): string {
 export function CustomerDetail() {
   const { programId, customerId } = useParams<{ programId: string; customerId: string }>()
   const navigate = useNavigate()
-  const { customers, transactions, loadCustomers, loadTransactions, adjustPoints, updateCustomer, deleteCustomer, getProgram } = useProgramsStore()
-  const merchant = useAuthStore(s => s.merchant)
-  const [delta, setDelta] = useState('')
-  const [note, setNote] = useState('')
-  const [saving, setSaving] = useState(false)
+  const { customers, transactions, loadCustomers, loadTransactions, updateCustomer, deleteCustomer, getProgram } = useProgramsStore()
 
   const [editName, setEditName] = useState('')
   const [editPhone, setEditPhone] = useState('')
@@ -52,19 +47,6 @@ export function CustomerDetail() {
     setEditCustomFields(customer.customFieldValues ?? {})
     setEditError('')
   }, [customer?.id])
-
-  async function handleAdjust() {
-    if (!programId || !customerId) return
-    const d = parseInt(delta)
-    if (!d || note.trim().length < 3) return
-    setSaving(true)
-    try {
-      await adjustPoints(programId, customerId, d, note.trim(), merchant?.email ?? 'admin')
-      setDelta(''); setNote('')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function handleSaveEdit() {
     if (!programId || !customerId) return
@@ -176,28 +158,13 @@ export function CustomerDetail() {
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
             <div className="rounded-lg bg-gray-50 py-3">
-              <p className="text-xl font-bold text-gray-900">{customer.pointsBalance}</p>
-              <p className="text-xs text-gray-400">Puntos</p>
+              <p className="text-xl font-bold text-gray-900">{customer.visitsCount}</p>
+              <p className="text-xs text-gray-400">Visitas</p>
             </div>
             <div className="rounded-lg bg-gray-50 py-3">
-              <p className="text-xl font-bold text-gray-900">{customer.totalEarnedPoints}</p>
-              <p className="text-xs text-gray-400">Ganados</p>
+              <p className="text-xl font-bold text-gray-900">{customer.hasPendingReward ? 'Sí' : 'No'}</p>
+              <p className="text-xs text-gray-400">Premio listo</p>
             </div>
-          </div>
-
-          <div className="mt-5 space-y-2 border-t border-gray-100 pt-4">
-            <p className="text-xs font-semibold text-gray-700">Ajuste manual de puntos</p>
-            <input value={delta} onChange={e => setDelta(e.target.value)} placeholder="+50 o -20"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
-            <input value={note} onChange={e => setNote(e.target.value)} placeholder="Motivo del ajuste"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
-            <button
-              onClick={handleAdjust}
-              disabled={saving || !delta || note.trim().length < 3}
-              className="w-full rounded-lg bg-primary py-2 text-xs font-bold text-white disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : 'Aplicar ajuste'}
-            </button>
           </div>
         </div>
 
@@ -213,8 +180,8 @@ export function CustomerDetail() {
                     <p className="font-medium text-gray-900 capitalize">{tx.type.replace('_', ' ')}</p>
                     <p className="text-xs text-gray-400">{new Date(tx.createdAt).toLocaleString('es-MX')}</p>
                   </div>
-                  <p className={tx.pointsDelta > 0 ? 'font-bold text-green-600' : 'font-bold text-red-600'}>
-                    {tx.pointsDelta > 0 ? '+' : ''}{tx.pointsDelta} pts
+                  <p className={tx.visitsDelta > 0 ? 'font-bold text-green-600' : tx.visitsDelta < 0 ? 'font-bold text-red-600' : 'font-bold text-gray-400'}>
+                    {tx.visitsDelta > 0 ? '+' : ''}{tx.visitsDelta} {Math.abs(tx.visitsDelta) === 1 ? 'visita' : 'visitas'}
                   </p>
                 </div>
               ))}

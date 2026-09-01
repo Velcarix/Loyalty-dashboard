@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProgramEditor } from '@/pages/ProgramEditor'
 import { useAuthStore } from '@/store/authStore'
 import { useProgramsStore } from '@/store/programsStore'
-import type { LoyaltyPointsConfig, LoyaltyProgram, LoyaltyVisitsConfig } from '@/types/loyalty'
+import type { LoyaltyProgram, LoyaltyVisitsConfig } from '@/types/loyalty'
 
 const originalCreateProgram = useProgramsStore.getState().createProgram
 const originalUpdateProgram = useProgramsStore.getState().updateProgram
 const mountedRoots: Root[] = []
 
-function programFixture(type: 'points' | 'visits'): LoyaltyProgram {
+function programFixture(type: 'visits'): LoyaltyProgram {
   return {
     id: `program-${type}`,
     businessId: 'merchant-1',
@@ -83,81 +83,6 @@ describe('ProgramEditor configuration handoff', () => {
     expect(stampsTemplate).toBeInstanceOf(HTMLButtonElement)
     act(() => stampsTemplate?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(stampsTemplate?.getAttribute('aria-pressed')).toBe('true')
-  })
-
-  it('keeps the stamps template unavailable for a points program', () => {
-    const program = programFixture('points')
-    const config: LoyaltyPointsConfig = {
-      programId: program.id,
-      pointsPerCent: 100,
-      minPurchaseCents: 0,
-      maxPointsPerPurchase: null,
-      expirationDays: null,
-      cashbackEnabled: false,
-      cashbackRateBps: 0,
-      centPerPoint: 100,
-      minPointsToRedeem: 10,
-      allowPartialRedemption: true,
-      maxVisitsPerDay: 1,
-      noPosRiskAcknowledgedAt: null,
-    }
-    useProgramsStore.setState({ programs: [{ program, config }] })
-
-    const form = renderEditor(`/programas/${program.id}`)
-    const stampsTemplate = Array.from(form.querySelectorAll('button')).find(button => button.textContent?.includes('Sellos'))
-
-    expect(stampsTemplate).toBeInstanceOf(HTMLButtonElement)
-    expect((stampsTemplate as HTMLButtonElement).disabled).toBe(true)
-    expect(stampsTemplate?.textContent).toContain('Solo para visitas')
-  })
-
-  it('sends the complete points contract when an existing points program is saved', async () => {
-    const program = programFixture('points')
-    const config: LoyaltyPointsConfig = {
-      programId: program.id,
-      pointsPerCent: 250,
-      minPurchaseCents: 1234,
-      maxPointsPerPurchase: 500,
-      expirationDays: 365,
-      cashbackEnabled: false,
-      cashbackRateBps: 0,
-      centPerPoint: 100,
-      minPointsToRedeem: 25,
-      allowPartialRedemption: true,
-      maxVisitsPerDay: 3,
-      noPosRiskAcknowledgedAt: null,
-    }
-    const updateProgram = vi.fn().mockResolvedValue(undefined)
-    useProgramsStore.setState({
-      programs: [{ program, config }],
-      updateProgram,
-    })
-
-    const form = renderEditor(`/programas/${program.id}`)
-    await act(async () => {
-      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    })
-
-    expect(updateProgram).toHaveBeenCalledWith(
-      program.id,
-      expect.objectContaining({
-        programName: 'Café Rewards',
-        brandColor: '#2563EB',
-      }),
-      {
-        pointsPerCent: 250,
-        minPurchaseCents: 1234,
-        maxPointsPerPurchase: 500,
-        expirationDays: 365,
-        cashbackEnabled: false,
-        cashbackRateBps: 0,
-        centPerPoint: 100,
-        minPointsToRedeem: 25,
-        allowPartialRedemption: true,
-        maxVisitsPerDay: 3,
-        noPosRiskAcknowledgedAt: null,
-      },
-    )
   })
 
   it('sends the complete visits contract when an existing visits program is saved', async () => {

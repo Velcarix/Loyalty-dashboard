@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { WalletPassPreview } from '@/components/WalletPassPreview'
 import { Icon } from '@/components/Icon'
-import type { LoyaltyPointsConfig, LoyaltyVisitsConfig } from '@/types/loyalty'
+import type { LoyaltyVisitsConfig } from '@/types/loyalty'
 
 export function ProgramsList() {
   const { programs, isLoading, loadPrograms } = useProgramsStore()
@@ -37,9 +37,7 @@ export function ProgramsList() {
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {programs.map(({ program, config }) => {
-          const isPoints = program.type === 'points'
-          const pc = isPoints ? config as LoyaltyPointsConfig : null
-          const vc = !isPoints ? config as LoyaltyVisitsConfig : null
+          const vc = config as LoyaltyVisitsConfig | null
           return (
             <Link key={program.id} to={`/programas/${program.id}`} className="group block rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-slate-900/5 focus:outline-none focus:ring-4 focus:ring-primary/20">
               <WalletPassPreview program={program} config={config} />
@@ -47,9 +45,7 @@ export function ProgramsList() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-slate-950">{program.programName}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {isPoints
-                    ? `1 punto cada $${((pc?.pointsPerCent ?? 100) / 100).toFixed(2)}${(pc?.minPurchaseCents ?? 0) > 0 ? ` · compra mín. $${((pc?.minPurchaseCents ?? 0) / 100).toFixed(0)}` : ''}`
-                    : `${vc?.visitsTarget ?? '?'} visitas · ${vc?.rewardDescription ?? 'Premio'}`}
+                  {`${vc?.visitsTarget ?? '?'} visitas · ${vc?.rewardDescription ?? 'Premio'}`}
                   </p>
                 </div>
                 <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition group-hover:bg-primary group-hover:text-white"><Icon name="arrow-right" size={15} /></span>

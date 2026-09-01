@@ -62,7 +62,7 @@ export function Customers() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1">
-                      {c.pointsBalance} pts
+                      {c.visitsCount} visitas
                       {c.hasPendingReward && (
                         <span className="inline-flex text-amber-600">
                           <Icon name="gift" size={16} />

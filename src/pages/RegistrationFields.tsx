@@ -152,7 +152,7 @@ function RegistrationFormPreview({
       <div style={{ backgroundColor: brandColor }} className="px-6 py-6 text-white">
         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/90 text-sm font-extrabold text-gray-900">•</div>
         <p className="text-lg font-extrabold">Mi programa</p>
-        <p className="text-sm opacity-75">Acumula y gana beneficios</p>
+        <p className="text-sm opacity-75">Junta visitas y gánate premios</p>
       </div>
       <div className="space-y-3 p-6">
         <h3 className="text-base font-bold text-gray-900">Únete al programa</h3>
@@ -177,7 +177,7 @@ function RegistrationFormPreview({
         ))}
 
         <div>
-          <p className="mb-1 text-xs font-semibold text-gray-700">PIN de 4 dígitos <span className="font-normal text-gray-400">(para canjear puntos)</span></p>
+          <p className="mb-1 text-xs font-semibold text-gray-700">PIN de 4 dígitos <span className="font-normal text-gray-400">(para canjear premios)</span></p>
           <div className="flex gap-2">
             {[0, 1, 2, 3].map(i => <div key={i} className="h-9 flex-1 rounded-lg border border-gray-200 bg-gray-50" />)}
           </div>

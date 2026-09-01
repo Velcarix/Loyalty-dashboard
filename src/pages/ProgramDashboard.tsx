@@ -74,7 +74,6 @@ export function ProgramDashboard() {
           <StatCard label="En riesgo" value={analytics.atRiskCustomers} icon="shield" tone="bg-amber-50 text-amber-700" />
           <StatCard label="Inactivos" value={analytics.lapsedCustomers} icon="pause" tone="bg-slate-100 text-slate-600" />
           <StatCard label="VIP" value={analytics.vipCustomers} icon="sparkles" tone="bg-violet-50 text-violet-700" />
-          <StatCard label="Puntos emitidos" value={analytics.totalPointsIssued} icon="gift" tone="bg-rose-50 text-rose-700" />
           <StatCard label="Beneficios aplicados" value={formatCurrency(analytics.totalDiscountCents)} icon="chart" tone="bg-cyan-50 text-cyan-700" />
         </div>
       )}

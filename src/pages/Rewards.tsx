@@ -9,7 +9,6 @@ const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
   { key: 'pct_discount', label: 'Descuento %', hint: 'Ej: 15% de descuento' },
   { key: 'fixed_discount', label: 'Descuento fijo', hint: 'Ej: $50 de descuento' },
   { key: 'bxgy', label: 'Compra X lleva Y', hint: 'Ej: 2x1 en bebidas' },
-  { key: 'bonus_points', label: 'Puntos extra', hint: 'Ej: 20 puntos bonus' },
   { key: 'vip_exclusive', label: 'Exclusivo VIP', hint: 'Solo para un nivel mínimo' },
 ]
 
@@ -62,10 +61,9 @@ export function Rewards() {
   const customFieldOptions = program?.customFields ?? []
   // El campo pointsRequired es genérico en el backend (loyalty_rewards) — en un
   // programa de visitas representa el número de visitas necesarias para ese
-  // nivel, no puntos. Ver reward-tiers.service.ts en el backend.
+  // nivel. Ver reward-tiers.service.ts en el backend.
   const isVisitsProgram = program?.type === 'visits'
-  const unitLabel = isVisitsProgram ? 'visitas' : 'puntos'
-  const unitLabelSingular = isVisitsProgram ? 'visita' : 'punto'
+  const unitLabel = 'visitas'
 
   useEffect(() => { if (programId) void loadRewards(programId) }, [programId])
 
@@ -148,7 +146,7 @@ export function Rewards() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nombre"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-            <input value={form.pointsRequired} onChange={e => setForm(f => ({ ...f, pointsRequired: e.target.value }))} type="number" min={0} placeholder={`${unitLabelSingular === 'visita' ? 'Visitas' : 'Puntos'} requeridos (0 = gratis si califica)`}
+            <input value={form.pointsRequired} onChange={e => setForm(f => ({ ...f, pointsRequired: e.target.value }))} type="number" min={0} placeholder="Visitas requeridas (0 = gratis si califica)"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
@@ -189,7 +187,7 @@ export function Rewards() {
                 <AudienceFilterEditor value={eligibility} onChange={setEligibility} customFieldOptions={customFieldOptions} />
               </>
             ) : (
-              <p className="text-xs text-gray-400">Abierta a cualquier cliente con los puntos suficientes.</p>
+              <p className="text-xs text-gray-400">Abierta a cualquier cliente con las visitas suficientes.</p>
             )}
           </div>
 
@@ -227,7 +225,7 @@ export function Rewards() {
                   <p className="font-bold text-gray-900">{r.name}{!r.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactiva</span>}</p>
                   <p className="text-xs text-gray-500">{r.description}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} {isVisitsProgram ? unitLabel : 'pts'}</span>
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} {unitLabel}</span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPES.find(t => t.key === r.type)?.label}</span>
                     {r.eligibility && (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">Público restringido</span>

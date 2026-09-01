@@ -148,7 +148,7 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     const savedProgram = await api.put<LoyaltyProgram>(`/api/v1/loyalty/programs/${programId}`, data)
     let savedConfig: LoyaltyPointsConfig | LoyaltyVisitsConfig | undefined
     if (config) {
-      const type = currentProgram?.program.type ?? 'points'
+      const type = currentProgram?.program.type ?? 'visits'
       if (type === 'points') savedConfig = await api.put<LoyaltyPointsConfig>(`/api/v1/loyalty/programs/${programId}/config/points`, config)
       else savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${programId}/config/visits`, config)
     }

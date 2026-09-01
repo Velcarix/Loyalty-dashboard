@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link, Navigate } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
-import { useAuthStore } from '@/store/authStore'
 import { WalletPassPreview } from '@/components/WalletPassPreview'
 import { Icon } from '@/components/Icon'
 import { api } from '@/lib/api'
@@ -16,8 +15,8 @@ import {
   type PassAppearanceZone,
   type PassTemplate,
 } from '@/lib/passDesign'
-import { buildPointsConfig, buildVisitsConfig, centsToPesosInput } from '@/lib/programConfig'
-import type { LoyaltyPointsConfig, LoyaltyVisitsConfig, LoyaltyProgram, LoyaltyBusinessInfo } from '@/types/loyalty'
+import { buildVisitsConfig } from '@/lib/programConfig'
+import type { LoyaltyVisitsConfig, LoyaltyProgram, LoyaltyBusinessInfo } from '@/types/loyalty'
 
 // Mismas reglas que backend/src/services/image-upload.service.ts — se validan
 // aquí primero para que el usuario vea el error de inmediato, no tras subir.
@@ -102,7 +101,6 @@ async function validateImage(file: File, rules: ImageRules): Promise<string | nu
 }
 
 interface Form {
-  type: 'points' | 'visits'
   programName: string
   description: string
   brandColor: string
@@ -116,26 +114,15 @@ interface Form {
   businessInstagram: string
   businessFacebook: string
   design: LoyaltyBusinessInfo['design']
-  minPointsToRedeem: string
-  centPerPoint: string
-  earnRatePesos: string
-  minPurchasePesos: string
-  maxPointsPerPurchase: string
-  expirationDays: string
-  allowPartialRedemption: boolean
   visitsTarget: string
   rewardDescription: string
   maxVisitsPerDay: string
   visitsVisualStyle: 'number' | 'stamp'
   stampImageUrl: string
   stampEmptyImageUrl: string
-  // Puntos sin POS vinculado — timestamp de cuando el comerciante aceptó el
-  // riesgo de fraude (nadie más que el propio empleado valida el monto tecleado).
-  pointsRiskAcceptedAt: string | null
 }
 
 const DEFAULTS: Form = {
-  type: 'visits',
   programName: '',
   description: '',
   brandColor: '#2563EB',
@@ -149,20 +136,12 @@ const DEFAULTS: Form = {
   businessInstagram: '',
   businessFacebook: '',
   design: DEFAULT_PASS_DESIGN,
-  minPointsToRedeem: '10',
-  centPerPoint: '100',
-  earnRatePesos: '1',
-  minPurchasePesos: '0',
-  maxPointsPerPurchase: '',
-  expirationDays: '',
-  allowPartialRedemption: true,
   visitsTarget: '10',
   rewardDescription: '',
   maxVisitsPerDay: '1',
   visitsVisualStyle: 'number',
   stampImageUrl: '',
   stampEmptyImageUrl: '',
-  pointsRiskAcceptedAt: null,
 }
 
 interface PendingFile {
@@ -215,7 +194,6 @@ export function ProgramEditor() {
   const { programId } = useParams<{ programId: string }>()
   const isEditing = !!programId
   const navigate = useNavigate()
-  const posLinked = useAuthStore(s => s.posLink?.linked ?? false)
   const { programs, loadPrograms, createProgram, updateProgram } = useProgramsStore()
   const [form, setForm] = useState<Form>(DEFAULTS)
   // Solo aplica al editar el premio base de un programa "visits" existente
@@ -352,11 +330,9 @@ export function ProgramEditor() {
       design: applyPassTemplate(current.design, template),
       // A template changes only visual presentation. It never touches the
       // target, customer balances, rewards, or the protected QR payload.
-      visitsVisualStyle: current.type === 'visits'
-        ? (template === 'stamps' ? 'stamp' : 'number')
-        : current.visitsVisualStyle,
+      visitsVisualStyle: template === 'stamps' ? 'stamp' : 'number',
     }))
-    setSelectedAppearanceZone(template === 'stamps' && form.type === 'visits' ? 'stamps' : 'background')
+    setSelectedAppearanceZone(template === 'stamps' ? 'stamps' : 'background')
   }
 
   function handleVisitsVisualStyle(visualStyle: 'number' | 'stamp') {
@@ -368,13 +344,7 @@ export function ProgramEditor() {
     setSelectedAppearanceZone(visualStyle === 'stamp' ? 'stamps' : 'progress')
   }
 
-  const antifraudLocked = form.type === 'points' && !posLinked
   const hasExistingPrograms = programs.length > 0
-  useEffect(() => {
-    if (antifraudLocked && form.maxVisitsPerDay !== '1') {
-      setForm(f => ({ ...f, maxVisitsPerDay: '1' }))
-    }
-  }, [antifraudLocked])
 
   // El listado ya carga los programas, pero esta comprobación también cubre
   // accesos directos a /programas/nuevo en una pestaña nueva.
@@ -391,11 +361,8 @@ export function ProgramEditor() {
     const existing = programs.find(p => p.program.id === programId)
     if (!existing) return
     const { program, config } = existing
-    const isPoints = program.type === 'points'
-    const pc = isPoints ? config as LoyaltyPointsConfig : null
-    const vc = !isPoints ? config as LoyaltyVisitsConfig : null
+    const vc = config as LoyaltyVisitsConfig | null
     setForm({
-      type: program.type,
       programName: program.programName,
       description: program.description,
       brandColor: program.brandColor,
@@ -409,20 +376,12 @@ export function ProgramEditor() {
       businessInstagram: program.businessInfo?.socials?.instagram ?? '',
       businessFacebook: program.businessInfo?.socials?.facebook ?? '',
       design: normalizePassDesign(program.businessInfo?.design),
-      minPointsToRedeem: pc?.minPointsToRedeem?.toString() ?? DEFAULTS.minPointsToRedeem,
-      centPerPoint: pc?.centPerPoint?.toString() ?? DEFAULTS.centPerPoint,
-      earnRatePesos: centsToPesosInput(pc?.pointsPerCent, DEFAULTS.earnRatePesos),
-      minPurchasePesos: centsToPesosInput(pc?.minPurchaseCents, DEFAULTS.minPurchasePesos),
-      maxPointsPerPurchase: pc?.maxPointsPerPurchase?.toString() ?? '',
-      expirationDays: pc?.expirationDays?.toString() ?? '',
-      allowPartialRedemption: pc?.allowPartialRedemption ?? true,
       visitsTarget: vc?.visitsTarget?.toString() ?? DEFAULTS.visitsTarget,
       rewardDescription: vc?.rewardDescription ?? '',
-      maxVisitsPerDay: (pc?.maxVisitsPerDay ?? vc?.maxVisitsPerDay ?? 1).toString(),
+      maxVisitsPerDay: (vc?.maxVisitsPerDay ?? 1).toString(),
       visitsVisualStyle: vc?.visualStyle ?? 'number',
       stampImageUrl: vc?.stampImageUrl ?? '',
       stampEmptyImageUrl: vc?.stampEmptyImageUrl ?? '',
-      pointsRiskAcceptedAt: pc?.noPosRiskAcknowledgedAt ?? null,
     })
   }, [programId, programs])
 
@@ -432,24 +391,12 @@ export function ProgramEditor() {
   }
 
   function buildConfig() {
-    return form.type === 'points'
-      ? buildPointsConfig({
-          earnRatePesos: form.earnRatePesos,
-          minPurchasePesos: form.minPurchasePesos,
-          maxPointsPerPurchase: form.maxPointsPerPurchase,
-          expirationDays: form.expirationDays,
-          centPerPoint: form.centPerPoint,
-          minPointsToRedeem: form.minPointsToRedeem,
-          allowPartialRedemption: form.allowPartialRedemption,
-          maxVisitsPerDay: form.maxVisitsPerDay,
-          noPosRiskAcknowledgedAt: posLinked ? null : form.pointsRiskAcceptedAt,
-        })
-      : buildVisitsConfig({
-          visitsTarget: form.visitsTarget,
-          rewardDescription: form.rewardDescription,
-          maxVisitsPerDay: form.maxVisitsPerDay,
-          visualStyle: form.visitsVisualStyle,
-        })
+    return buildVisitsConfig({
+      visitsTarget: form.visitsTarget,
+      rewardDescription: form.rewardDescription,
+      maxVisitsPerDay: form.maxVisitsPerDay,
+      visualStyle: form.visitsVisualStyle,
+    })
   }
 
   function normalizeWebsite(value: string): string | undefined {
@@ -491,7 +438,7 @@ export function ProgramEditor() {
       }
       if (isEditing && programId) {
         const config = buildConfig()
-        await updateProgram(programId, programData, form.type === 'visits' ? { ...config, applyToExistingCustomers: applyToExisting } : config)
+        await updateProgram(programId, programData, { ...config, applyToExistingCustomers: applyToExisting })
         navigate(`/programas/${programId}`)
       } else {
         const created = await createProgram({
@@ -553,7 +500,7 @@ export function ProgramEditor() {
   // color propio de la zona de sellos si se definió, o el fondo de la
   // tarjeta cuando se usa el panel automático.
   const stampAreaColorInput = passDesign.stampAreaBackgroundColor ?? brandColorInput
-  const hasLowStampContrast = form.type === 'visits' && passDesign.stampShape !== 'none' && (
+  const hasLowStampContrast = passDesign.stampShape !== 'none' && (
     getColorContrastRatio(passDesign.stampFilledColor, stampAreaColorInput) < 3
     || getColorContrastRatio(passDesign.stampEmptyColor, stampAreaColorInput) < 3
   )
@@ -636,19 +583,16 @@ export function ProgramEditor() {
                 <div className="grid gap-2 sm:grid-cols-3">
                   {PASS_TEMPLATES.map(template => {
                     const selected = passDesign.template === template.id
-                    const unavailableForProgram = form.type === 'points' && template.id === 'stamps'
                     return (
                       <button
                         key={template.id}
                         type="button"
                         aria-pressed={selected}
-                        disabled={unavailableForProgram}
                         onClick={() => handleTemplateSelect(template.id)}
                         className={`min-h-11 rounded-xl border px-3 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-violet-500/40 ${selected ? 'border-violet-600 bg-white shadow-sm' : 'border-violet-100 bg-white/55 hover:border-violet-300'} disabled:cursor-not-allowed disabled:opacity-45`}
                       >
                         <span className="block text-sm font-bold text-slate-900">{template.name}</span>
                         <span className="mt-1 block text-xs leading-4 text-slate-600">{template.description}</span>
-                        {unavailableForProgram && <span className="mt-1 block text-[11px] font-semibold text-slate-500">Solo para visitas</span>}
                       </button>
                     )
                   })}
@@ -688,14 +632,14 @@ export function ProgramEditor() {
 
                 {selectedAppearanceZone === 'progress' && (
                   <div className="space-y-3">
-                    <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">Etiqueta visible</span><input maxLength={12} value={form.saldoLabel} onChange={e => setForm(f => ({ ...f, saldoLabel: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder={form.type === 'points' ? 'Puntos' : 'Visitas'} /></label>
-                    {form.type === 'visits' && <div className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={form.visitsVisualStyle === 'number'} onClick={() => handleVisitsVisualStyle('number')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'number' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Número</button><button type="button" aria-pressed={form.visitsVisualStyle === 'stamp'} onClick={() => handleVisitsVisualStyle('stamp')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Sellos</button></div>}
+                    <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-600">Etiqueta visible</span><input maxLength={12} value={form.saldoLabel} onChange={e => setForm(f => ({ ...f, saldoLabel: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Visitas" /></label>
+                    <div className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={form.visitsVisualStyle === 'number'} onClick={() => handleVisitsVisualStyle('number')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'number' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Número</button><button type="button" aria-pressed={form.visitsVisualStyle === 'stamp'} onClick={() => handleVisitsVisualStyle('stamp')} className={`min-h-11 rounded-lg border px-3 py-2 text-xs font-semibold ${form.visitsVisualStyle === 'stamp' ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>Sellos</button></div>
                     <p className="text-xs leading-5 text-slate-500">La cifra, la meta y el progreso real vienen de Loyalty y no se pueden editar aquí.</p>
                   </div>
                 )}
 
                 {selectedAppearanceZone === 'stamps' && (
-                  form.type === 'visits' ? <div className="space-y-3">
+                  <div className="space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <ImagePickerField label="Imagen del sello lleno" accept="image/png,image/jpeg" hint="PNG o JPG, mín. 64×64px, máx. 1 MB" previewUrl={stampPending?.previewUrl ?? (form.stampImageUrl || null)} uploading={uploadingStamp} error={stampError} onPick={handlePickStamp} />
                       <ImagePickerField label="Imagen del sello vacío" accept="image/png,image/jpeg" hint="Opcional. Ícono para la casilla sin ganar" previewUrl={stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null)} uploading={uploadingStampEmpty} error={stampEmptyError} onPick={handlePickStampEmpty} />
@@ -731,7 +675,7 @@ export function ProgramEditor() {
                       <p className="mt-1.5 text-xs leading-5 text-slate-500">Deja este campo vacío para conservar el fondo automático actual; escribe un HEX para usar un color propio (ej. un azul más oscuro que el fondo general).</p>
                     </div>
                     {hasLowStampContrast && <p role="status" className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Los sellos podrían perderse sobre este fondo. Usa un color con mayor contraste.</p>}
-                  </div> : <p className="text-sm leading-6 text-slate-600">Los sellos están disponibles en programas de visitas. La tarjeta de puntos conserva su contador real.</p>
+                  </div>
                 )}
 
                 {selectedAppearanceZone === 'reward' && (
@@ -749,14 +693,14 @@ export function ProgramEditor() {
                   <label className="mb-1.5 block text-sm font-semibold text-slate-700">Etiqueta del saldo</label>
                   <input maxLength={12} value={form.saldoLabel} onChange={e => setForm(f => ({ ...f, saldoLabel: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
-                    placeholder={form.type === 'points' ? 'Puntos' : 'Visitas'} />
+                    placeholder="Visitas" />
                   <p className="mt-1 text-xs text-slate-400">Máx. 12 caracteres; si queda vacío usamos el nombre predeterminado.</p>
                 </div>
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">Descripción corta</label>
                 <input required maxLength={60} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Gana puntos en cada compra" />
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Junta 10 visitas y gánate un café" />
               </div>
 
               <div>
@@ -817,7 +761,7 @@ export function ProgramEditor() {
                     {(['plate', 'minimal'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.logoStyle === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, logoStyle: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.logoStyle === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{option === 'plate' ? 'En placa' : 'Minimalista'}</button>)}
                   </div>
                 </div>
-                {form.type === 'visits' && form.visitsVisualStyle === 'stamp' && <div>
+                {form.visitsVisualStyle === 'stamp' && <div>
                   <p className="mb-1.5 text-xs font-bold text-slate-600">Forma de los sellos</p>
                   <div className="grid grid-cols-2 gap-2">
                     {(['circle', 'rounded', 'square', 'none'] as const).map(option => <button key={option} type="button" aria-pressed={passDesign.stampShape === option} onClick={() => setForm(f => ({ ...f, design: { ...passDesign, stampShape: option } }))} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${passDesign.stampShape === option ? 'border-primary bg-primary/5 text-primary' : 'border-slate-200 text-slate-600'}`}>{{ circle: 'Circular', rounded: 'Redondeado', square: 'Cuadrado', none: 'Sin contenedor' }[option]}</button>)}
@@ -830,10 +774,9 @@ export function ProgramEditor() {
                 <span><span className="block font-semibold">Mostrar nombre del cliente</span><span className="text-xs text-slate-500">Aparece en la tarjeta, siempre debajo del progreso y el premio.</span></span>
               </label>
 
-              {form.type === 'visits' && (
-                <div>
-                  <p className="mb-1.5 text-xs font-bold text-slate-600">Cómo le llamas a...</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="mb-1.5 text-xs font-bold text-slate-600">Cómo le llamas a...</p>
+                <div className="grid gap-3 sm:grid-cols-2">
                     <label>
                       <span className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Sello (singular / plural)</span><span>{(passDesign.terminology.stampSingular ?? '').length}/20</span></span>
                       <div className="grid grid-cols-2 gap-2">
@@ -848,9 +791,8 @@ export function ProgramEditor() {
                         <input maxLength={20} value={passDesign.terminology.rewardPlural ?? ''} onChange={e => setForm(f => ({ ...f, design: { ...passDesign, terminology: { ...passDesign.terminology, rewardPlural: e.target.value } } }))} placeholder="premios" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" />
                       </div>
                     </label>
-                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </section>
 
@@ -859,19 +801,7 @@ export function ProgramEditor() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700"><Icon name="gift" size={18} /></span>
               <div><p className="text-sm font-bold text-slate-950">4. Reglas y recompensa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Define una meta clara para el cliente y límites seguros para tu operación.</p></div>
             </div>
-            {form.type === 'points' ? (
-              <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Compra para ganar 1 punto</span><span className="relative block"><span className="pointer-events-none absolute left-3 top-2.5 text-sm text-slate-400">$</span><input type="number" min="0.01" step="0.01" value={form.earnRatePesos} onChange={e => setForm(f => ({ ...f, earnRatePesos: e.target.value }))} className="w-full rounded-xl border border-slate-200 py-2.5 pl-7 pr-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></span></label>
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Compra mínima para acumular</span><span className="relative block"><span className="pointer-events-none absolute left-3 top-2.5 text-sm text-slate-400">$</span><input type="number" min="0" step="0.01" value={form.minPurchasePesos} onChange={e => setForm(f => ({ ...f, minPurchasePesos: e.target.value }))} className="w-full rounded-xl border border-slate-200 py-2.5 pl-7 pr-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></span></label>
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Puntos mínimos para canjear</span><input type="number" min="1" value={form.minPointsToRedeem} onChange={e => setForm(f => ({ ...f, minPointsToRedeem: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Máx. puntos por compra <span className="font-normal text-slate-400">(opcional)</span></span><input type="number" min="1" value={form.maxPointsPerPurchase} onChange={e => setForm(f => ({ ...f, maxPointsPerPurchase: e.target.value }))} placeholder="Sin límite" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Vencimiento de puntos <span className="font-normal text-slate-400">(días)</span></span><input type="number" min="1" value={form.expirationDays} onChange={e => setForm(f => ({ ...f, expirationDays: e.target.value }))} placeholder="No vencen" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
-                </div>
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700"><input type="checkbox" checked={form.allowPartialRedemption} onChange={e => setForm(f => ({ ...f, allowPartialRedemption: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" /><span><span className="block font-semibold">Permitir canje parcial</span><span className="text-xs text-slate-500">El cliente puede usar una parte de sus puntos cuando aún no completa un premio.</span></span></label>
-              </div>
-            ) : (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Visitas para ganar el premio</span><input type="number" min="1" value={form.visitsTarget} onChange={e => setForm(f => ({ ...f, visitsTarget: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
                   <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Premio</span><input required value={form.rewardDescription} onChange={e => setForm(f => ({ ...f, rewardDescription: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Café americano gratis" /></label>
@@ -907,11 +837,9 @@ export function ProgramEditor() {
                   </div>
                 )}
               </div>
-            )}
             <div className="mt-4 border-t border-slate-100 pt-4">
               <label className="mb-1.5 block text-sm font-semibold text-slate-700">Máximo de acumulaciones por día</label>
-              {antifraudLocked && <p className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Fijo en 1 por seguridad, sin POS vinculado. Vincula tu POS en Ajustes para desbloquear límites más altos.</p>}
-              <select value={form.maxVisitsPerDay} onChange={e => setForm(f => ({ ...f, maxVisitsPerDay: e.target.value }))} disabled={antifraudLocked} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-70">
+              <select value={form.maxVisitsPerDay} onChange={e => setForm(f => ({ ...f, maxVisitsPerDay: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:opacity-70">
                 {['1', '2', '3', '5'].map(n => <option key={n} value={n}>{n} por cliente</option>)}
               </select>
             </div>
@@ -961,24 +889,22 @@ export function ProgramEditor() {
             <div className="bg-[radial-gradient(circle_at_top,_#e0edff,_#f8fafc_55%)] p-5">
               <WalletPassPreview
                 program={{
-                  type: form.type,
+                  type: 'visits',
                   brandColor: brandColorInput,
                   programName: form.programName || 'Mi programa',
-                  description: form.description || 'Acumula y gana beneficios',
+                  description: form.description || 'Junta visitas y gánate premios',
                   logoUrl: logoPending?.previewUrl ?? form.logoUrl,
                   bannerUrl: bannerPending?.previewUrl ?? (form.bannerUrl || null),
                   saldoLabel: form.saldoLabel || null,
                   businessInfo: { design: passDesign },
                 }}
-                config={form.type === 'visits'
-                  ? {
-                      visitsTarget: Number.parseInt(form.visitsTarget, 10) || 10,
-                      rewardDescription: form.rewardDescription,
-                      visualStyle: form.visitsVisualStyle,
-                      stampImageUrl: stampPending?.previewUrl ?? (form.stampImageUrl || null),
-                      stampEmptyImageUrl: stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null),
-                    }
-                  : { minPointsToRedeem: Number.parseInt(form.minPointsToRedeem, 10) || 10 }}
+                config={{
+                  visitsTarget: Number.parseInt(form.visitsTarget, 10) || 10,
+                  rewardDescription: form.rewardDescription,
+                  visualStyle: form.visitsVisualStyle,
+                  stampImageUrl: stampPending?.previewUrl ?? (form.stampImageUrl || null),
+                  stampEmptyImageUrl: stampEmptyPending?.previewUrl ?? (form.stampEmptyImageUrl || null),
+                }}
                 editable
                 selectedZone={selectedAppearanceZone}
                 onZoneSelect={setSelectedAppearanceZone}
