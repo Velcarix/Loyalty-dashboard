@@ -105,8 +105,13 @@ function ImagePickerField({
       </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       {previewUrl && onRemove && (
-        <button type="button" onClick={onRemove} disabled={uploading} className="mt-1.5 text-xs font-semibold text-red-600 transition hover:underline disabled:opacity-50">
-          Quitar imagen
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={uploading}
+          className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50"
+        >
+          <Icon name="trash" size={14} /> Quitar imagen
         </button>
       )}
     </div>
