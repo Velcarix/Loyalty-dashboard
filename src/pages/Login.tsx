@@ -24,8 +24,10 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div role="img" aria-label="Copo" className="mx-auto h-20 w-48 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
-          <h1 className="sr-only">Copo Loyalty</h1>
+          <div className="mx-auto mb-2 flex items-center justify-center gap-1.5">
+            <img src="/brand/copo-mark.png" alt="" className="h-11 w-11 object-contain" />
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">Copo</h1>
+          </div>
           <p className="mt-1 text-sm text-gray-500">Inicia sesión en tu cuenta</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl bg-white p-6 shadow-sm">

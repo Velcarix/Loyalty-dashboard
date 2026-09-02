@@ -20,7 +20,10 @@ export function Layout() {
     <div className="flex min-h-screen bg-[#F7F9FC] text-ink">
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 self-start flex-col overflow-y-auto border-r border-slate-200 bg-white md:flex">
         <div className="border-b border-slate-100 px-5 py-5">
-          <div role="img" aria-label="Copo" className="h-11 w-32 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
+          <div className="flex items-center gap-1.5">
+            <img src="/brand/copo-mark.png" alt="" className="h-9 w-9 shrink-0 object-contain" />
+            <span className="text-lg font-extrabold tracking-tight text-ink">Copo</span>
+          </div>
           <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Loyalty</p>
         </div>
         <nav aria-label="Navegación principal" className="flex-1 space-y-1 px-3 py-4">
@@ -52,7 +55,10 @@ export function Layout() {
       </aside>
       <main className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur md:hidden">
-          <div role="img" aria-label="Copo" className="h-9 w-24 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
+          <div className="flex items-center gap-1">
+            <img src="/brand/copo-mark.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
+            <span className="text-sm font-extrabold tracking-tight text-ink">Copo</span>
+          </div>
           <div className="flex items-center gap-1">
             {navItems.map(item => <NavLink key={item.to} to={item.to} className={({ isActive }) => `inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition ${isActive ? 'bg-primary/10 text-primary' : 'text-slate-600'}`}><Icon name={item.icon} size={16} />{item.label}</NavLink>)}
             <button onClick={handleLogout} aria-label="Cerrar sesión" className="inline-flex min-h-10 items-center rounded-lg px-2 text-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98]"><Icon name="logout" size={17} /></button>

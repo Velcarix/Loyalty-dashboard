@@ -34,7 +34,10 @@ export function Signup() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div role="img" aria-label="Copo" className="mx-auto mb-3 h-16 w-40 bg-[url('/brand/copo-logo-horizontal.png')] bg-[length:140%_auto] bg-center bg-no-repeat" />
+          <div className="mx-auto mb-3 flex items-center justify-center gap-1.5">
+            <img src="/brand/copo-mark.png" alt="Copo" className="h-10 w-10 object-contain" />
+            <span className="text-xl font-extrabold tracking-tight text-ink">Copo</span>
+          </div>
           <h1 className="text-2xl font-bold text-ink">Crea tu cuenta</h1>
           <p className="mt-1 text-sm text-gray-500">Empieza a fidelizar clientes en minutos</p>
         </div>
