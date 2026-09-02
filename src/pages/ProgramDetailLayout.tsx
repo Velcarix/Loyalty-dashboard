@@ -17,7 +17,7 @@ const tabs = [
 
 export function ProgramDetailLayout() {
   const { programId } = useParams<{ programId: string }>()
-  const { programs, loadPrograms, getProgram, toggleProgram, updateProgramBanner } = useProgramsStore()
+  const { programs, loadPrograms, getProgram, toggleProgram, updateProgramBanner, removeProgramBanner } = useProgramsStore()
   const program = programId ? getProgram(programId) : undefined
   const [qrVisible, setQrVisible] = useState(false)
   const [togglingActive, setTogglingActive] = useState(false)
@@ -41,6 +41,20 @@ export function ProgramDetailLayout() {
       await updateProgramBanner(programId, file)
     } catch (err) {
       setBannerError(err instanceof Error ? err.message : 'No se pudo actualizar el banner')
+    } finally {
+      setBannerUploading(false)
+    }
+  }
+
+  async function handleRemoveBanner() {
+    if (!programId) return
+    if (!window.confirm('¿Quitar el banner de este programa?')) return
+    setBannerError(null)
+    setBannerUploading(true)
+    try {
+      await removeProgramBanner(programId)
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : 'No se pudo quitar el banner')
     } finally {
       setBannerUploading(false)
     }
@@ -74,17 +88,29 @@ export function ProgramDetailLayout() {
                 <span className="text-xs font-semibold">Sin banner</span>
               </div>
             )}
-            <label className="absolute bottom-2 right-2 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-950/70 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm backdrop-blur transition hover:bg-slate-950/85 focus-within:ring-2 focus-within:ring-white/60">
-              <Icon name={bannerUploading ? 'pause' : 'edit'} size={14} />
-              {bannerUploading ? 'Subiendo…' : bannerUrl ? 'Cambiar banner' : 'Agregar banner'}
-              <input
-                type="file"
-                accept="image/png,image/jpeg"
-                className="hidden"
-                disabled={bannerUploading}
-                onChange={e => { const f = e.target.files?.[0]; if (f) void handlePickBanner(f); e.target.value = '' }}
-              />
-            </label>
+            <div className="absolute bottom-2 right-2 flex items-center gap-1.5">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-950/70 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm backdrop-blur transition hover:bg-slate-950/85 focus-within:ring-2 focus-within:ring-white/60">
+                <Icon name={bannerUploading ? 'pause' : 'edit'} size={14} />
+                {bannerUploading ? 'Subiendo…' : bannerUrl ? 'Cambiar banner' : 'Agregar banner'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  disabled={bannerUploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) void handlePickBanner(f); e.target.value = '' }}
+                />
+              </label>
+              {bannerUrl && (
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveBanner()}
+                  disabled={bannerUploading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950/70 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm backdrop-blur transition hover:bg-red-600/85 focus:outline-none focus:ring-2 focus:ring-white/60 disabled:opacity-50"
+                >
+                  <Icon name="trash" size={14} /> Quitar
+                </button>
+              )}
+            </div>
           </div>
           <p className="mt-1 px-1 text-xs text-slate-400">PNG o JPG, proporción cercana a 1125×432px, máx. 2 MB.</p>
           {bannerError && <p className="mt-1 px-1 text-xs text-red-600">{bannerError}</p>}

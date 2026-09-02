@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
-import { formatCurrency } from '@/lib/color'
 import { Icon, type IconName } from '@/components/Icon'
 
 function StatCard({ label, value, icon, tone, sub }: { label: string; value: string | number; icon: IconName; tone: string; sub?: string }) {
@@ -74,7 +73,6 @@ export function ProgramDashboard() {
           <StatCard label="En riesgo" value={analytics.atRiskCustomers} icon="shield" tone="bg-amber-50 text-amber-700" />
           <StatCard label="Inactivos" value={analytics.lapsedCustomers} icon="pause" tone="bg-slate-100 text-slate-600" />
           <StatCard label="VIP" value={analytics.vipCustomers} icon="sparkles" tone="bg-violet-50 text-violet-700" />
-          <StatCard label="Beneficios aplicados" value={formatCurrency(analytics.totalDiscountCents)} icon="chart" tone="bg-cyan-50 text-cyan-700" />
         </div>
       )}
     </div>
