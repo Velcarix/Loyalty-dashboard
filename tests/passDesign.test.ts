@@ -63,6 +63,12 @@ describe('pass-design normalization', () => {
     })
   })
 
+  it('keeps a valid custom text color and drops a malformed one so the pass falls back to automatic contrast', () => {
+    expect(normalizePassDesign({ textColor: '#101820' }).textColor).toBe('#101820')
+    expect(normalizePassDesign({ textColor: 'white' as never }).textColor).toBeUndefined()
+    expect(normalizePassDesign({}).textColor).toBeUndefined()
+  })
+
   it('normalizes interactive editor controls independently, keeping valid controls when another zone is invalid', () => {
     expect(normalizePassDesign({
       template: 'stamps',

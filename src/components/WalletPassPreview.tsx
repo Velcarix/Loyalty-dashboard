@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { Icon } from '@/components/Icon'
+import QRCode from 'qrcode'
 import { getTextColorForBg } from '@/lib/color'
 import { normalizePassDesign, type PassAppearanceZone, type PassStampShape } from '@/lib/passDesign'
 import type { LoyaltyProgram, LoyaltyPointsConfig, LoyaltyVisitsConfig } from '@/types/loyalty'
@@ -65,7 +65,7 @@ function StampGrid({
   const shapeClass = shape === 'circle' ? 'rounded-full' : shape === 'rounded' ? 'rounded-lg' : 'rounded-none'
 
   return (
-    <span className="flex flex-wrap items-center justify-center gap-2" aria-label={`${filled} de ${target} visitas`}>
+    <span className="flex flex-wrap items-center justify-center gap-2.5" aria-label={`${filled} de ${target} visitas`}>
       {Array.from({ length: visibleTarget }).map((_, i) => {
         const isFilled = i < filled
         const imageUrl = isFilled ? stampImageUrl : emptyStampImageUrl
@@ -74,7 +74,7 @@ function StampGrid({
         // sin recorte ni forma alrededor (object-fit: contain, alpha intacto).
         if (shape === 'none') {
           return (
-            <span key={i} data-pass-stamp={i} className="flex h-8 w-8 shrink-0 items-center justify-center">
+            <span key={i} data-pass-stamp={i} className="flex h-9 w-9 shrink-0 items-center justify-center">
               {imageUrl && <img src={imageUrl} alt="" className="h-full w-full object-contain" />}
             </span>
           )
@@ -84,7 +84,7 @@ function StampGrid({
           <span
             key={i}
             data-pass-stamp={i}
-            className={`flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden ${shapeClass}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden ${shapeClass}`}
             style={{
               border: `2px ${isFilled ? 'solid' : 'dashed'} ${isFilled ? filledColor : emptyColor}`,
               backgroundColor: isFilled && !imageUrl ? filledColor : 'transparent',
@@ -99,21 +99,40 @@ function StampGrid({
   )
 }
 
-function ProtectedQr({ accentColor }: { accentColor: string }) {
+// QR real (mismo `qrcode` que RegistrationQrModal) para que el merchant vea el
+// mismo bloque que aparece abajo en Apple/Google Wallet. El payload es un texto
+// de muestra: el QR del pass real es rotativo (TOTP) y no se puede previsualizar.
+// El wrapper mantiene el aria-label protegido y la nota "QR y datos reales"
+// porque este bloque no es editable.
+function PassQr({ subLabel }: { subLabel: string }) {
+  const matrix = QRCode.create('COPO-WALLET-PREVIEW', { errorCorrectionLevel: 'M' })
+  const size = matrix.modules.size
+  const modules: ReactNode[] = []
+  for (let row = 0; row < size; row += 1) {
+    for (let col = 0; col < size; col += 1) {
+      if (matrix.modules.data[row * size + col]) {
+        modules.push(<rect key={`${row}-${col}`} x={col} y={row} width={1} height={1} />)
+      }
+    }
+  }
+
   return (
     <div
       role="note"
       aria-label="Código QR protegido; no se puede editar"
-      className="mx-auto flex w-full max-w-[9.5rem] flex-col items-center gap-1.5 rounded-2xl bg-white px-3 py-3 text-center text-slate-800 shadow-sm"
+      className="mx-auto flex w-full max-w-[10.5rem] flex-col items-center gap-2 rounded-2xl bg-white px-3 py-3 shadow-sm"
     >
-      <span className="flex aspect-square w-16 items-center justify-center rounded-xl border border-slate-200 bg-slate-50">
-        <Icon name="qrcode" size={30} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Código protegido</span>
-        <span className="block text-xs font-semibold text-slate-800">QR y datos reales</span>
-      </span>
-      <span className="text-xs font-bold" style={{ color: accentColor }}>Seguro</span>
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="h-28 w-28"
+        shapeRendering="crispEdges"
+        fill="#0B0B0B"
+        aria-hidden="true"
+      >
+        {modules}
+      </svg>
+      <span className="font-mono text-[11px] tracking-[0.16em] text-slate-500">{subLabel}</span>
+      <span className="sr-only">QR y datos reales</span>
     </div>
   )
 }
@@ -129,22 +148,26 @@ export function WalletPassPreview({
 }: Props) {
   const color = program.brandColor ?? '#2563EB'
   const design = normalizePassDesign(program.businessInfo?.design)
-  // Banner images are untrusted brand assets with arbitrary brightness. A
-  // stable dark scrim plus white text protects readability independently of
-  // the program's base color.
-  const textColor = design.cardStyle === 'banner' && program.bannerUrl ? '#FFFFFF' : getTextColorForBg(color)
-  const subColor = textColor === '#000000' ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.72)'
+  // Automatic text color: white over a dark scrim on banners, otherwise the
+  // best-contrast black/white for the base color. A merchant-set design.textColor
+  // overrides it everywhere the letters appear.
+  const autoTextColor = design.cardStyle === 'banner' && program.bannerUrl ? '#FFFFFF' : getTextColorForBg(color)
+  const textColor = design.textColor ?? autoTextColor
+  // "Dark letters" drives the translucent tone used for secondary text and
+  // panels. getTextColorForBg returns the color that contrasts with its input,
+  // so a '#FFFFFF' result means the chosen text color is itself dark.
+  const textIsDark = getTextColorForBg(textColor) === '#FFFFFF'
+  const subColor = textIsDark ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.72)'
   // Stamps need a surface of their own so the grid stays readable even when a
   // busy banner photo sits behind it. Without an explicit
   // stampAreaBackgroundColor, this keeps the original translucent look so
   // programs created before this setting existed render unchanged.
   const hasCustomStampArea = Boolean(design.stampAreaBackgroundColor)
-  const stampAreaBg = design.stampAreaBackgroundColor ?? (textColor === '#000000' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.14)')
+  const stampAreaBg = design.stampAreaBackgroundColor ?? (textIsDark ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.12)')
   const stampAreaTextColor = hasCustomStampArea ? getTextColorForBg(design.stampAreaBackgroundColor!) : textColor
   const stampAreaSubColor = hasCustomStampArea
     ? (stampAreaTextColor === '#000000' ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.72)')
     : subColor
-  const stampPanelBorder = hasCustomStampArea ? 'transparent' : (textColor === '#000000' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.2)')
   const isPoints = program.type === 'points'
   const pointsConfig = isPoints ? (config as Partial<LoyaltyPointsConfig>) : null
   const visitsConfig = !isPoints ? (config as Partial<LoyaltyVisitsConfig>) : null
@@ -169,12 +192,12 @@ export function WalletPassPreview({
   // for a two-column header; the "brand" template keeps a centered, stacked
   // header instead, so the counter stays in the body there.
   const headerCounterVisible = useStampGrid && !isBrandTemplate
-  const progressCounterClass = useStampGrid ? 'text-2xl' : (isBrandTemplate ? 'text-3xl' : 'text-5xl')
+  const pointsCounterClass = isBrandTemplate ? 'text-3xl' : 'text-5xl'
 
   return (
     <div
-      className="relative overflow-hidden rounded-[1.45rem] shadow-xl shadow-slate-900/15"
-      style={{ background: cardBackground, aspectRatio: '0.64' }}
+      className="relative flex min-h-[29rem] flex-col overflow-hidden rounded-[1.45rem] shadow-xl shadow-slate-900/15"
+      style={{ background: cardBackground }}
       aria-label="Vista previa de tarjeta de lealtad"
     >
       {design.cardStyle === 'banner' && program.bannerUrl && (
@@ -182,41 +205,41 @@ export function WalletPassPreview({
       )}
       {design.cardStyle === 'banner' && program.bannerUrl && <div className="absolute inset-0 bg-slate-950/35" />}
 
-      <div className="relative flex h-full flex-col p-4 sm:p-5">
+      <div className="relative flex flex-1 flex-col p-4 sm:p-5">
         <PreviewZone
           zone="background"
           label="fondo y colores"
           editable={editable}
           selected={selectedZone === 'background'}
           onSelect={onZoneSelect}
-          className="-m-1 mb-2 min-h-11 p-1"
+          className="-mx-1 -mt-1 min-h-9 px-1 pt-1"
         >
           <span className="sr-only">Fondo de la tarjeta</span>
         </PreviewZone>
 
-        {/* Header: logo + nombre a la izquierda, contador a la derecha —
-            misma composición que headerFields en el pass real de Apple. */}
-        <div className={`flex items-start gap-2 ${isBrandTemplate ? 'flex-col items-center text-center' : 'justify-between'}`}>
+        {/* Encabezado: logo + nombre a la izquierda, contador a la derecha —
+            misma composición que logo/logoText + headerFields del pass real. */}
+        <div className={`flex items-start gap-3 ${isBrandTemplate ? 'flex-col items-center text-center' : 'justify-between'}`}>
           <PreviewZone
             zone="identity"
             label="logo y encabezado"
             editable={editable}
             selected={selectedZone === 'identity'}
             onSelect={onZoneSelect}
-            className={`flex min-w-0 flex-1 items-center gap-2 p-2 ${isBrandTemplate ? 'flex-col justify-center' : ''}`}
+            className={`flex min-w-0 flex-1 items-center gap-2 p-1.5 ${isBrandTemplate ? 'flex-col justify-center' : ''}`}
           >
             {program.logoUrl && design.logoStyle === 'plate' ? (
-              <span className="flex h-12 min-w-12 max-w-28 items-center justify-center rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
+              <span className="flex h-10 min-w-10 max-w-24 items-center justify-center rounded-lg border border-black/10 bg-white p-1 shadow-sm">
                 <img src={program.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
               </span>
             ) : program.logoUrl ? (
-              <img src={program.logoUrl} alt="" className="h-11 max-w-28 object-contain" />
+              <img src={program.logoUrl} alt="" className="h-9 w-9 shrink-0 object-contain" />
             ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg border text-xs font-bold" style={{ color: textColor, borderColor: subColor }}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-xs font-bold" style={{ color: textColor, borderColor: subColor }}>
                 {(program.programName ?? 'LP').slice(0, 2).toUpperCase()}
               </span>
             )}
-            <span className="min-w-0 truncate text-xs font-semibold" style={{ color: subColor }}>
+            <span className="min-w-0 truncate text-sm font-bold leading-tight" style={{ color: textColor }}>
               {program.programName ?? 'Loyalty Program'}
             </span>
           </PreviewZone>
@@ -228,15 +251,16 @@ export function WalletPassPreview({
               editable={editable}
               selected={selectedZone === 'progress'}
               onSelect={onZoneSelect}
-              className="shrink-0 p-2 text-right"
+              className="shrink-0 p-1.5 text-right"
             >
-              <span className="block text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: subColor }}>{saldoLabel}</span>
-              <span className="mt-0.5 block text-lg font-bold tabular-nums" style={{ color: textColor }}>{sampleVisits}/{target ?? 10}</span>
+              <span className="block text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: subColor }}>{saldoLabel}</span>
+              <span className="mt-0.5 block text-xl font-bold leading-none tabular-nums" style={{ color: textColor }}>{sampleVisits}/{target ?? 10}</span>
             </PreviewZone>
           )}
         </div>
 
-        <div className={`flex flex-1 flex-col ${isBrandTemplate ? 'justify-end' : 'justify-between'} gap-3 pt-2`}>
+        <div className="flex flex-1 flex-col gap-3 pt-3">
+          {useStampGrid && <div className="min-h-4 flex-1" />}
           {useStampGrid && (
             <PreviewZone
               zone="stamps"
@@ -244,10 +268,10 @@ export function WalletPassPreview({
               editable={editable}
               selected={selectedZone === 'stamps'}
               onSelect={onZoneSelect}
-              className="rounded-xl p-3"
-              style={{ backgroundColor: stampAreaBg, border: `1px solid ${stampPanelBorder}` }}
+              className={`-mx-4 px-4 py-3 sm:-mx-5 sm:px-5 ${hasCustomStampArea ? 'mx-0 rounded-xl sm:mx-0' : ''}`}
+              style={{ backgroundColor: stampAreaBg }}
             >
-              <span className="flex min-h-[3.5rem] items-center">
+              <span className="flex min-h-[3.75rem] items-center justify-center">
                 <StampGrid
                   target={target ?? 10}
                   filled={sampleVisits}
@@ -261,12 +285,15 @@ export function WalletPassPreview({
               {/* Instrucción del editor, no contenido del pass — solo aparece
                   mientras se edita esta zona, nunca en el resultado final. */}
               {editable && selectedZone === 'stamps' && (
-                <span className="mt-2 block text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: stampAreaSubColor }}>
+                <span className="mt-2 block text-center text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: stampAreaSubColor }}>
                   Toca para cambiar forma y color
                 </span>
               )}
             </PreviewZone>
           )}
+
+          {/* Espacio libre: en el pass real hay aire entre el strip y los campos. */}
+          {!isBrandTemplate && <div className="min-h-4 flex-1" />}
 
           {!headerCounterVisible && (
             <PreviewZone
@@ -275,10 +302,10 @@ export function WalletPassPreview({
               editable={editable}
               selected={selectedZone === 'progress'}
               onSelect={onZoneSelect}
-              className={`p-2 ${isBrandTemplate ? 'rounded-xl bg-slate-950/25' : ''}`}
+              className={`p-1.5 ${isBrandTemplate ? 'rounded-xl bg-slate-950/25' : ''}`}
             >
               <span className="block text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: subColor }}>{saldoLabel}</span>
-              <span className={`mt-1 block font-bold tabular-nums ${progressCounterClass}`} style={{ color: textColor }}>
+              <span className={`mt-1 block font-bold tabular-nums ${pointsCounterClass}`} style={{ color: textColor }}>
                 {isPoints ? sampleBalance : `${sampleVisits}${target ? `/${target}` : ''}`}
               </span>
               <span className="mt-1 block text-xs font-medium leading-5" style={{ color: subColor }}>
@@ -294,12 +321,12 @@ export function WalletPassPreview({
           )}
 
           {!isPoints ? (
-            // Tres columnas — igual que secondaryFields (Faltan / Siguiente
-            // premio) + auxiliaryFields (Miembro) en el pass real.
-            <div className={`grid gap-2 p-2 ${design.showMemberName ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            // Dos/tres columnas — igual que secondaryFields (Faltan / Siguiente
+            // premio) + auxiliaryFields (Miembro) en el pass real de Apple.
+            <div className={`grid gap-3 px-1 ${design.showMemberName ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div className="min-w-0">
-                <span className="block text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: subColor }}>Faltan</span>
-                <span className="mt-0.5 block truncate text-xs font-semibold" style={{ color: textColor }}>
+                <span className="block text-[10px] font-bold uppercase tracking-[0.04em]" style={{ color: subColor }}>Faltan</span>
+                <span className="mt-0.5 block truncate text-lg font-semibold leading-tight" style={{ color: textColor }}>
                   {target && remainingVisits > 0 ? `${remainingVisits} ${remainingVisits === 1 ? stampSingular : stampPlural}` : '¡Lista!'}
                 </span>
               </div>
@@ -309,16 +336,16 @@ export function WalletPassPreview({
                 editable={editable}
                 selected={selectedZone === 'reward'}
                 onSelect={onZoneSelect}
-                className="min-w-0 rounded-lg px-2 py-1.5"
+                className="min-w-0 rounded-lg px-2 py-1"
                 style={{ backgroundColor: rewardColor, color: rewardTextColor }}
               >
-                <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] opacity-70">Siguiente {rewardWord}</span>
-                <span className="mt-0.5 block truncate text-xs font-bold">{visitsConfig?.rewardDescription || program.description || 'Beneficio'}</span>
+                <span className="block truncate text-[10px] font-bold uppercase tracking-[0.04em] opacity-70">Siguiente {rewardWord}</span>
+                <span className="mt-0.5 block truncate text-lg font-semibold leading-tight">{visitsConfig?.rewardDescription || program.description || 'Beneficio'}</span>
               </PreviewZone>
               {design.showMemberName && (
                 <div className="min-w-0">
-                  <span className="block text-[9px] font-bold uppercase tracking-[0.12em]" style={{ color: subColor }}>Miembro</span>
-                  <span className="mt-0.5 block truncate text-xs font-semibold" style={{ color: textColor }}>Roberto Vargas</span>
+                  <span className="block text-[10px] font-bold uppercase tracking-[0.04em]" style={{ color: subColor }}>Miembro</span>
+                  <span className="mt-0.5 block truncate text-lg font-semibold leading-tight" style={{ color: textColor }}>Roberto Vargas</span>
                 </div>
               )}
             </div>
@@ -330,24 +357,25 @@ export function WalletPassPreview({
                 editable={editable}
                 selected={selectedZone === 'reward'}
                 onSelect={onZoneSelect}
-                className="p-2"
+                className="p-1.5"
               >
                 <span className="block rounded-xl px-3 py-2.5 shadow-sm" style={{ backgroundColor: rewardColor, color: rewardTextColor }}>
                   <span className="block text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">{rewardWord}</span>
-                  <span className="mt-0.5 block text-xs font-bold">{program.description || 'Beneficio para tu próxima visita'}</span>
+                  <span className="mt-0.5 block text-sm font-bold">{program.description || 'Beneficio para tu próxima visita'}</span>
                 </span>
               </PreviewZone>
 
               {design.showMemberName && (
-                <div className="px-2">
+                <div className="px-1.5">
                   <span className="block text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: subColor }}>Miembro</span>
-                  <span className="block text-xs font-semibold" style={{ color: textColor }}>Roberto Vargas</span>
+                  <span className="block text-sm font-semibold" style={{ color: textColor }}>Roberto Vargas</span>
                 </div>
               )}
             </>
           )}
 
-          <ProtectedQr accentColor={design.accentColor} />
+          <div className="min-h-4 flex-1" />
+          <PassQr subLabel="1234 5678 90" />
         </div>
       </div>
     </div>

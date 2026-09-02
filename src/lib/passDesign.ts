@@ -13,6 +13,13 @@ export interface LoyaltyPassTerminology {
 
 export interface LoyaltyPassDesignConfig {
   accentColor: string
+  /**
+   * Color of the text/letters on the front of the pass (program name, counter,
+   * labels, member name). Undefined = automatic: pick black or white for the
+   * best contrast against the card background, which is how every program
+   * created before this setting existed keeps rendering.
+   */
+  textColor?: string
   cardStyle: PassCardStyle
   logoStyle: PassLogoStyle
   stampShape: PassStampShape
@@ -157,6 +164,12 @@ export function normalizePassDesign(
     accentColor: design?.accentColor && isHexColor(design.accentColor)
       ? design.accentColor
       : DEFAULT_PASS_DESIGN.accentColor,
+    // Undefined on purpose when unset: it is the signal that means "compute the
+    // text color from the background for contrast", so pre-existing programs
+    // render exactly as before.
+    textColor: design?.textColor && isHexColor(design.textColor)
+      ? design.textColor
+      : undefined,
     cardStyle: design?.cardStyle === 'solid' || design?.cardStyle === 'banner' || design?.cardStyle === 'gradient'
       ? design.cardStyle
       : DEFAULT_PASS_DESIGN.cardStyle,

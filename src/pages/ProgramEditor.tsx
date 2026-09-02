@@ -4,7 +4,7 @@ import { useProgramsStore } from '@/store/programsStore'
 import { WalletPassPreview } from '@/components/WalletPassPreview'
 import { Icon } from '@/components/Icon'
 import { api } from '@/lib/api'
-import { getColorContrastRatio } from '@/lib/color'
+import { getColorContrastRatio, getTextColorForBg } from '@/lib/color'
 import {
   applyPassTemplate,
   BRAND_PRESETS,
@@ -444,6 +444,10 @@ export function ProgramEditor() {
     getColorContrastRatio(passDesign.stampFilledColor, stampAreaColorInput) < 3
     || getColorContrastRatio(passDesign.stampEmptyColor, stampAreaColorInput) < 3
   )
+  // Solo avisa cuando el comerciante fijó un color propio: el modo automático
+  // ya garantiza contraste. 4.5 = umbral AA para texto normal.
+  const hasLowTextContrast = Boolean(passDesign.textColor)
+    && getColorContrastRatio(passDesign.textColor!, brandColorInput) < 4.5
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -590,6 +594,26 @@ export function ProgramEditor() {
                         <span className="mb-2 block text-xs font-bold text-slate-600">Color de acento</span>
                         <span className="flex items-center gap-2"><input type="color" aria-label="Color de acento de la tarjeta" value={passDesign.accentColor} onChange={e => updatePassDesign({ accentColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.accentColor}</span></span>
                       </label>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-600">Color del texto</span>
+                        {passDesign.textColor && <button type="button" onClick={() => updatePassDesign({ textColor: undefined })} className="text-[11px] font-semibold text-primary hover:underline">Usar automático</button>}
+                      </div>
+                      <span className="flex items-center gap-2">
+                        <input type="color" aria-label="Color del texto de la tarjeta" value={passDesign.textColor ?? getTextColorForBg(brandColorInput)} onChange={e => updatePassDesign({ textColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" />
+                        <input
+                          value={passDesign.textColor ?? ''}
+                          maxLength={7}
+                          pattern="#[0-9A-Fa-f]{6}"
+                          placeholder="Automático (blanco o negro según el fondo)"
+                          onChange={e => updatePassDesign({ textColor: e.target.value || undefined })}
+                          className="min-w-0 flex-1 bg-transparent font-mono text-xs uppercase text-slate-700 outline-none placeholder:normal-case placeholder:font-sans placeholder:text-slate-400"
+                          aria-label="Código hexadecimal del color del texto"
+                        />
+                      </span>
+                      <p className="mt-1.5 text-xs leading-5 text-slate-500">Afecta el nombre del programa, el contador, las etiquetas y el nombre del cliente. Déjalo vacío para elegir automáticamente el color con mejor contraste sobre el fondo. Se aplica en Apple Wallet y en la tarjeta web; Google Wallet ajusta el texto a blanco o negro por su cuenta según el fondo.</p>
+                      {hasLowTextContrast && <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">Este color tiene poco contraste sobre el fondo de la tarjeta y puede costar leerlo. Prueba uno más claro u oscuro.</p>}
                     </div>
                     <div>
                       <p className="mb-1.5 text-xs font-bold text-slate-600">Estilo de fondo</p>
