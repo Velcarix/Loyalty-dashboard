@@ -3,7 +3,6 @@ import {
   buildPointsConfig,
   buildVisitsConfig,
   centsToPesosInput,
-  getContrastTextColor,
   type PointsConfigDraft,
   type VisitsConfigDraft,
 } from '@/lib/programConfig'
@@ -106,13 +105,4 @@ describe('branding conversion and contrast utilities', () => {
     expect(centsToPesosInput(cents)).toBe(expected)
   })
 
-  it.each([
-    ['#FFFFFF', '#000000'],
-    ['#0B132B', '#FFFFFF'],
-    ['#16A34A', '#000000'],
-    ['#777777', '#000000'],
-    ['invalid', '#FFFFFF'],
-  ])('selects the strongest accessible text contrast for %s', (background, expected) => {
-    expect(getContrastTextColor(background)).toBe(expected)
-  })
 })

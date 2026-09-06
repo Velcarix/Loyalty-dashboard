@@ -148,14 +148,13 @@ export function WalletPassPreview({
 }: Props) {
   const color = program.brandColor ?? '#2563EB'
   const design = normalizePassDesign(program.businessInfo?.design)
-  // Automatic text color: white over a dark scrim on banners, otherwise the
-  // best-contrast black/white for the base color. A merchant-set design.textColor
-  // overrides it everywhere the letters appear.
-  const autoTextColor = design.cardStyle === 'banner' && program.bannerUrl ? '#FFFFFF' : getTextColorForBg(color)
-  const textColor = design.textColor ?? autoTextColor
-  // "Dark letters" drives the translucent tone used for secondary text and
-  // panels. getTextColorForBg returns the color that contrasts with its input,
-  // so a '#FFFFFF' result means the chosen text color is itself dark.
+  // Color de las letras: siempre automático. Blanco sobre el velo oscuro del
+  // banner y, en el resto de los casos, el que más contraste tiene con el color
+  // de la tarjeta según APCA. No hay ajuste manual que lo pueda sobrescribir.
+  const textColor = design.cardStyle === 'banner' && program.bannerUrl ? '#FFFFFF' : getTextColorForBg(color)
+  // "Letras oscuras" define el tono translúcido del texto secundario y de los
+  // paneles. getTextColorForBg devuelve el color que contrasta con su entrada,
+  // así que un '#FFFFFF' aquí significa que las letras elegidas son oscuras.
   const textIsDark = getTextColorForBg(textColor) === '#FFFFFF'
   const subColor = textIsDark ? 'rgba(0,0,0,0.62)' : 'rgba(255,255,255,0.72)'
   // Stamps need a surface of their own so the grid stays readable even when a

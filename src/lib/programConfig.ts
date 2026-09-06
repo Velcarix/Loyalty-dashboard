@@ -72,16 +72,3 @@ export function centsToPesosInput(value: number | null | undefined, fallback = '
   if (value === null || value === undefined || value < 0) return fallback
   return (value / 100).toString()
 }
-
-export function getContrastTextColor(hex: string): '#000000' | '#FFFFFF' {
-  const normalized = hex.replace('#', '')
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return '#FFFFFF'
-  const channels = [0, 2, 4].map(index => Number.parseInt(normalized.slice(index, index + 2), 16) / 255)
-  const [red, green, blue] = channels.map(channel => (
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  ))
-  const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-  const whiteContrast = 1.05 / (luminance + 0.05)
-  const blackContrast = (luminance + 0.05) / 0.05
-  return whiteContrast >= 4.5 && whiteContrast >= blackContrast ? '#FFFFFF' : '#000000'
-}
