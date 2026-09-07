@@ -47,6 +47,31 @@ function PreviewZone({
   )
 }
 
+// Reparto de sellos: copia de computeStampGrid en wallet-stamp-render.ts
+// (backend), evaluado con las proporciones del strip de Apple (375x144 menos
+// sus márgenes) para que el preview parta los sellos igual que el pass real:
+// 10 → 5 y 5, 12 → 6 y 6, 6 → una sola fila.
+const MAX_STAMP_COLUMNS = 6
+const MAX_STAMP_ROWS = 3
+const ROW_SWITCH_MARGIN = 1
+const STRIP_GRID_WIDTH = 375 * 0.9
+const STRIP_GRID_HEIGHT = 144 * 0.76
+// Lado máximo del sello en el preview; en tarjetas angostas se encoge solo
+// (flex-basis) antes que romper la fila.
+const STAMP_MAX_SIZE_PX = 44
+const STAMP_GAP_PX = 10 // = gap-2.5
+
+function computeStampColumns(count: number): number {
+  let best = { columns: Math.ceil(count / MAX_STAMP_ROWS), cell: 0 }
+  for (let rows = 1; rows <= MAX_STAMP_ROWS; rows += 1) {
+    const columns = Math.ceil(count / rows)
+    if (columns > MAX_STAMP_COLUMNS) continue
+    const cell = Math.min(STRIP_GRID_WIDTH / columns, STRIP_GRID_HEIGHT / rows)
+    if (cell > best.cell + ROW_SWITCH_MARGIN) best = { columns, cell }
+  }
+  return best.columns
+}
+
 function StampGrid({
   target, filled, stampImageUrl, emptyStampImageUrl, filledColor, emptyColor, shape,
 }: {
@@ -63,9 +88,23 @@ function StampGrid({
   const visibleTarget = Math.min(Math.max(target, 1), 12)
   const hiddenCount = Math.max(target - visibleTarget, 0)
   const shapeClass = shape === 'circle' ? 'rounded-full' : shape === 'rounded' ? 'rounded-lg' : 'rounded-none'
+  const columns = computeStampColumns(visibleTarget)
+  // flex-basis exacto para `columns` por fila: la fila corta donde debe y la
+  // última fila incompleta queda centrada por justify-center.
+  // El 0.5px extra absorbe el redondeo subpíxel: sin él, un ancho de tarjeta
+  // justo podía empujar el último sello a una fila nueva.
+  const stampStyle = {
+    flexBasis: `calc((100% - ${(columns - 1) * STAMP_GAP_PX + 0.5}px) / ${columns})`,
+    maxWidth: STAMP_MAX_SIZE_PX,
+  }
+  const gridMaxWidth = columns * STAMP_MAX_SIZE_PX + (columns - 1) * STAMP_GAP_PX
 
   return (
-    <span className="flex flex-wrap items-center justify-center gap-2.5" aria-label={`${filled} de ${target} visitas`}>
+    <span
+      className="flex w-full flex-wrap items-center justify-center gap-2.5"
+      style={{ maxWidth: gridMaxWidth }}
+      aria-label={`${filled} de ${target} visitas`}
+    >
       {Array.from({ length: visibleTarget }).map((_, i) => {
         const isFilled = i < filled
         const imageUrl = isFilled ? stampImageUrl : emptyStampImageUrl
@@ -74,7 +113,7 @@ function StampGrid({
         // sin recorte ni forma alrededor (object-fit: contain, alpha intacto).
         if (shape === 'none') {
           return (
-            <span key={i} data-pass-stamp={i} className="flex h-9 w-9 shrink-0 items-center justify-center">
+            <span key={i} data-pass-stamp={i} style={stampStyle} className="flex aspect-square shrink-0 items-center justify-center">
               {imageUrl && <img src={imageUrl} alt="" className="h-full w-full object-contain" />}
             </span>
           )
@@ -84,8 +123,9 @@ function StampGrid({
           <span
             key={i}
             data-pass-stamp={i}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden ${shapeClass}`}
+            className={`flex aspect-square shrink-0 items-center justify-center overflow-hidden ${shapeClass}`}
             style={{
+              ...stampStyle,
               border: `2px ${isFilled ? 'solid' : 'dashed'} ${isFilled ? filledColor : emptyColor}`,
               backgroundColor: isFilled && !imageUrl ? filledColor : 'transparent',
             }}
