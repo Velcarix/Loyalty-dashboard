@@ -124,10 +124,6 @@ export function ProgramEditor() {
   const navigate = useNavigate()
   const { programs, loadPrograms, createProgram, updateProgram } = useProgramsStore()
   const [form, setForm] = useState<Form>(DEFAULTS)
-  // Solo aplica al editar el premio base de un programa "visits" existente
-  // (un programa nuevo no tiene clientes todavía) — ver checkbox junto a
-  // "Visitas para ganar el premio".
-  const [applyToExisting, setApplyToExisting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [isCheckingProgramLimit, setIsCheckingProgramLimit] = useState(() => !isEditing && programs.length === 0)
@@ -378,7 +374,9 @@ export function ProgramEditor() {
       }
       if (isEditing && programId) {
         const config = buildConfig()
-        await updateProgram(programId, programData, { ...config, applyToExistingCustomers: applyToExisting })
+        // visitsTarget/rewardDescription viajan sin cambios desde la config cargada:
+        // el premio base solo se edita en Recompensas, que propaga por su cuenta.
+        await updateProgram(programId, programData, config)
         navigate(`/programas/${programId}`)
       } else {
         const created = await createProgram({
@@ -713,7 +711,7 @@ export function ProgramEditor() {
                 {selectedAppearanceZone === 'reward' && (
                   <div className="space-y-3">
                     <label className="block rounded-xl border border-slate-200 p-3"><span className="mb-2 block text-xs font-bold text-slate-600">Color del bloque de premio</span><span className="flex items-center gap-2"><input type="color" aria-label="Color del bloque de premio" value={passDesign.rewardColor} onChange={e => updatePassDesign({ rewardColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.rewardColor}</span></span></label>
-                    <p className="text-xs leading-5 text-slate-500">El contenido del premio se define en Reglas y recompensa; su disponibilidad se mantiene protegida.</p>
+                    <p className="text-xs leading-5 text-slate-500">El contenido del premio se define en Recompensas; su disponibilidad se mantiene protegida.</p>
                     <div className="border-t border-slate-100 pt-3">
                       <span className="mb-1 flex items-center justify-between text-xs font-bold text-slate-600"><span>Cómo le llamas a un premio</span><span className="font-normal text-slate-400">{(passDesign.terminology.rewardSingular ?? '').length}/20</span></span>
                       <div className="grid grid-cols-2 gap-2">
@@ -729,31 +727,21 @@ export function ProgramEditor() {
 
           <section className="rounded-2xl border border-slate-200 p-4 sm:p-5">
             <div className="mb-4 flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700"><Icon name="gift" size={18} /></span>
-              <div><p className="text-sm font-bold text-slate-950">5. Reglas y recompensa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Define una meta clara para el cliente y límites seguros para tu operación.</p></div>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700"><Icon name="shield" size={18} /></span>
+              <div><p className="text-sm font-bold text-slate-950">5. Reglas del programa</p><p className="mt-0.5 text-xs leading-5 text-slate-500">Límites seguros para tu operación. Los premios se configuran en Recompensas.</p></div>
             </div>
             <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Visitas para ganar el premio</span><input type="number" min="1" value={form.visitsTarget} onChange={e => setForm(f => ({ ...f, visitsTarget: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" /></label>
-                  <label><span className="mb-1.5 block text-sm font-semibold text-slate-700">Premio</span><input required value={form.rewardDescription} onChange={e => setForm(f => ({ ...f, rewardDescription: e.target.value }))} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="Ej: Café americano gratis" /></label>
-                </div>
-                {isEditing && programId && (
-                  <>
-                    <p className="text-xs leading-5 text-slate-500">
-                      ¿Quieres más de un nivel de premio (ej. 5 visitas → café, 10 → postre)? Agrega niveles adicionales en{' '}
-                      <Link to={`/programas/${programId}/rewards`} className="font-semibold text-primary hover:underline">Recompensas</Link>.
-                    </p>
-                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2.5">
-                      <span className="text-sm font-semibold text-slate-700">Aplicar a usuarios actuales</span>
-                      <input type="checkbox" checked={applyToExisting} onChange={e => setApplyToExisting(e.target.checked)} className="h-4 w-4 accent-primary" />
-                    </label>
-                    <p className="text-xs leading-5 text-slate-500">
-                      {applyToExisting
-                        ? 'La meta/premio nuevos se actualizan también para los clientes que ya tienen wallet.'
-                        : 'Solo aplica a wallets nuevas — los clientes actuales conservan la meta/premio con la que ya venían.'}
-                    </p>
-                  </>
-                )}
+                <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-600">
+                  {isEditing && programId ? (
+                    <>
+                      La meta de visitas y el premio se definen en{' '}
+                      <Link to={`/programas/${programId}/rewards`} className="font-semibold text-primary hover:underline">Recompensas</Link>
+                      {' '}— ahí configuras el premio principal y todos los niveles adicionales (ej. 5 visitas → café, 10 → postre).
+                    </>
+                  ) : (
+                    <>Al terminar de crear el programa, define la meta de visitas y el premio en la sección <strong>Recompensas</strong>.</>
+                  )}
+                </p>
                 <p className="text-xs leading-5 text-slate-500">
                   El formato del contador (número o sellos) y las imágenes de sello se eligen en{' '}
                   <a href="#diseno-tarjeta" onClick={() => setSelectedAppearanceZone('progress')} className="font-semibold text-primary hover:underline">Diseño de la tarjeta → Contador</a>.

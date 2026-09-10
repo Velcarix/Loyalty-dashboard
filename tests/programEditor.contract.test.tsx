@@ -85,6 +85,26 @@ describe('ProgramEditor configuration handoff', () => {
     expect(stampsTemplate?.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('no longer renders the base reward fields — se configuran en Recompensas', () => {
+    const program = programFixture('visits')
+    const config: LoyaltyVisitsConfig = {
+      programId: program.id,
+      visitsTarget: 8,
+      rewardDescription: 'Café gratis',
+      maxVisitsPerDay: 2,
+      visualStyle: 'stamp',
+      stampImageUrl: 'https://cdn.example.test/stamp.png',
+    }
+    useProgramsStore.setState({ programs: [{ program, config }] })
+
+    const form = renderEditor(`/programas/${program.id}`)
+    const labels = Array.from(form.querySelectorAll('span')).map(node => node.textContent ?? '')
+
+    expect(labels.some(text => text.includes('Visitas para ganar el premio'))).toBe(false)
+    expect(labels.some(text => text.includes('Aplicar a usuarios actuales'))).toBe(false)
+    expect(form.textContent).toContain('Máximo de acumulaciones por día')
+  })
+
   it('sends the complete visits contract when an existing visits program is saved', async () => {
     const program = programFixture('visits')
     const config: LoyaltyVisitsConfig = {
@@ -109,12 +129,13 @@ describe('ProgramEditor configuration handoff', () => {
     expect(updateProgram).toHaveBeenCalledWith(
       program.id,
       expect.any(Object),
+      // El premio base viaja intacto desde la config cargada: ahora solo se
+      // edita (y propaga) desde la pantalla de Recompensas.
       {
         visitsTarget: 8,
         rewardDescription: 'Café gratis',
         maxVisitsPerDay: 2,
         visualStyle: 'stamp',
-        applyToExistingCustomers: false,
       },
     )
   })

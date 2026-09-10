@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
-import type { AudienceFilter, LoyaltyReward, RewardType } from '@/types/loyalty'
+import type { AudienceFilter, LoyaltyReward, LoyaltyVisitsConfig, RewardType } from '@/types/loyalty'
 
 const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
   { key: 'free_product', label: 'Producto/servicio gratis', hint: 'Ej: corte de cabello gratis' },
@@ -43,7 +43,7 @@ function buildConfig(form: Form): Record<string, unknown> {
 
 export function Rewards() {
   const { programId } = useParams<{ programId: string }>()
-  const { rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward, getProgram } = useProgramsStore()
+  const { rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward, getProgram, updateVisitsConfig } = useProgramsStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<LoyaltyReward | null>(null)
   const [form, setForm] = useState<Form>(FORM_DEFAULTS)
@@ -58,8 +58,19 @@ export function Rewards() {
   const [applyToExisting, setApplyToExisting] = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleteApplyExisting, setDeleteApplyExisting] = useState(false)
+  // Premio principal (nivel base): vive en LoyaltyVisitsConfig, no en
+  // loyalty_rewards. Se edita aquí para que todos los premios del programa se
+  // configuren en un solo lugar — el editor de programa ya no lo toca.
+  const [baseVisits, setBaseVisits] = useState('')
+  const [baseReward, setBaseReward] = useState('')
+  const [baseApplyExisting, setBaseApplyExisting] = useState(false)
+  const [savingBase, setSavingBase] = useState(false)
+  const [baseError, setBaseError] = useState('')
+  const [baseNotice, setBaseNotice] = useState('')
 
-  const program = programId ? getProgram(programId)?.program : null
+  const programFull = programId ? getProgram(programId) : undefined
+  const program = programFull?.program ?? null
+  const visitsConfig = (programFull?.config ?? null) as LoyaltyVisitsConfig | null
   const customFieldOptions = program?.customFields ?? []
   // El campo pointsRequired es genérico en el backend (loyalty_rewards) — en un
   // programa de visitas representa el número de visitas necesarias para ese
@@ -68,6 +79,48 @@ export function Rewards() {
   const unitLabel = 'visitas'
 
   useEffect(() => { if (programId) void loadRewards(programId) }, [programId])
+
+  useEffect(() => {
+    if (!visitsConfig) return
+    setBaseVisits(String(visitsConfig.visitsTarget ?? ''))
+    setBaseReward(visitsConfig.rewardDescription ?? '')
+  }, [visitsConfig?.programId, visitsConfig?.visitsTarget, visitsConfig?.rewardDescription])
+
+  async function handleSaveBase() {
+    if (!programId || !visitsConfig) return
+    const target = Number.parseInt(baseVisits, 10)
+    if (!Number.isInteger(target) || target < 1) {
+      setBaseError('Las visitas para ganar el premio deben ser un número mayor a 0.')
+      return
+    }
+    if (!baseReward.trim()) {
+      setBaseError('Escribe qué se lleva el cliente al llegar a la meta.')
+      return
+    }
+    setSavingBase(true)
+    setBaseError('')
+    setBaseNotice('')
+    const propagated = baseApplyExisting
+    try {
+      await updateVisitsConfig(programId, {
+        visitsTarget: target,
+        rewardDescription: baseReward.trim(),
+        maxVisitsPerDay: visitsConfig.maxVisitsPerDay,
+        visualStyle: visitsConfig.visualStyle,
+        applyToExistingCustomers: baseApplyExisting,
+      })
+      setBaseApplyExisting(false)
+      setBaseNotice(
+        propagated
+          ? 'Premio principal guardado. Los clientes actuales se actualizarán en unos segundos.'
+          : 'Premio principal guardado. Aplica a las wallets nuevas.',
+      )
+    } catch (err) {
+      setBaseError(err instanceof Error ? err.message : 'No se pudo guardar el premio principal')
+    } finally {
+      setSavingBase(false)
+    }
+  }
 
   function openCreate() {
     setEditing(null)
@@ -147,12 +200,51 @@ export function Rewards() {
 
   return (
     <div>
-      {isVisitsProgram && (
-        <p className="mb-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs leading-5 text-slate-500">
-          El nivel base (meta y premio principal) se configura en <strong>Editar → Reglas y recompensa</strong>.
-          Agrega aquí niveles adicionales para varios premios por cantidad de visitas — pueden requerir menos o más
-          visitas que el premio principal (ej. 2 visitas → 20% descuento, 20 visitas → producto especial).
-        </p>
+      {isVisitsProgram && visitsConfig && (
+        <div className="mb-6 rounded-2xl bg-white p-5 shadow-sm">
+          <div className="mb-1 flex items-center gap-2">
+            <h3 className="font-bold text-gray-900">Premio principal</h3>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">Nivel base</span>
+          </div>
+          <p className="mb-4 text-xs leading-5 text-gray-500">
+            Es la meta que ve el cliente en su tarjeta. Abajo puedes agregar niveles adicionales que requieran
+            menos o más {unitLabel} que esta meta (ej. 2 visitas → 20% descuento, 20 visitas → producto especial).
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label>
+              <span className="mb-1.5 block text-sm font-semibold text-gray-700">Visitas para ganar el premio</span>
+              <input type="number" min={1} value={baseVisits} onChange={e => setBaseVisits(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            </label>
+            <label>
+              <span className="mb-1.5 block text-sm font-semibold text-gray-700">Premio</span>
+              <input value={baseReward} onChange={e => setBaseReward(e.target.value)} placeholder="Ej: Café americano gratis"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            </label>
+          </div>
+
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <label className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-700">Aplicar a usuarios actuales</span>
+              <input type="checkbox" checked={baseApplyExisting} onChange={e => setBaseApplyExisting(e.target.checked)} className="h-4 w-4 accent-primary" />
+            </label>
+            <p className="mt-1 text-xs text-gray-400">
+              {baseApplyExisting
+                ? 'La meta y el premio nuevos se actualizan también para los clientes que ya tienen wallet.'
+                : 'Solo aplica a wallets nuevas — los clientes actuales conservan la meta/premio con la que ya venían.'}
+            </p>
+          </div>
+
+          {baseError && <p role="alert" className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">{baseError}</p>}
+          {baseNotice && <p role="status" className="mt-3 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700">{baseNotice}</p>}
+
+          <div className="mt-4">
+            <button onClick={handleSaveBase} disabled={savingBase}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+              {savingBase ? 'Guardando…' : 'Guardar premio principal'}
+            </button>
+          </div>
+        </div>
       )}
       <div className="mb-4 flex justify-end">
         <button onClick={openCreate} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">+ Nueva recompensa</button>

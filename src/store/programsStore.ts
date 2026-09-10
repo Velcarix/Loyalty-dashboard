@@ -43,6 +43,16 @@ interface ProgramsState {
     data: Partial<LoyaltyProgram>,
     config?: (Partial<LoyaltyPointsConfig> | Partial<LoyaltyVisitsConfig>) & { applyToExistingCustomers?: boolean },
   ) => Promise<void>
+  /**
+   * Guarda solo el LoyaltyVisitsConfig (premio principal + límite diario) sin
+   * tocar el resto del programa — lo usa la pantalla de Recompensas, que es
+   * donde se configuran todos los premios. El PUT del backend exige la config
+   * completa, así que hay que mandar los cuatro campos.
+   */
+  updateVisitsConfig: (
+    programId: string,
+    config: Omit<LoyaltyVisitsConfig, 'programId'> & { applyToExistingCustomers?: boolean },
+  ) => Promise<void>
   updateProgramBanner: (programId: string, file: File) => Promise<void>
   removeProgramBanner: (programId: string) => Promise<void>
   toggleProgram: (programId: string, isActive: boolean) => Promise<void>
@@ -159,6 +169,15 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
       programs: s.programs.map(p => p.program.id === programId
         ? { ...p, program: savedProgram, config: savedConfig ?? p.config }
         : p),
+    }))
+  },
+
+  updateVisitsConfig: async (programId, config) => {
+    const requestGeneration = get().requestGeneration
+    const savedConfig = await api.put<LoyaltyVisitsConfig>(`/api/v1/loyalty/programs/${programId}/config/visits`, config)
+    if (get().requestGeneration !== requestGeneration) return
+    set(s => ({
+      programs: s.programs.map(p => p.program.id === programId ? { ...p, config: savedConfig } : p),
     }))
   },
 
