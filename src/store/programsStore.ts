@@ -73,14 +73,19 @@ interface ProgramsState {
   updateReward: (programId: string, rewardId: string, body: Partial<LoyaltyReward> & { applyToExistingCustomers?: boolean }) => Promise<void>
   deleteReward: (programId: string, rewardId: string, applyToExistingCustomers?: boolean) => Promise<void>
 
-  loadAnalytics: (programId: string, startDate: string, endDate: string) => Promise<void>
+  /** branchId opcional: filtra días/horas/retorno por sucursal. */
+  loadAnalytics: (programId: string, startDate: string, endDate: string, branchId?: string | null) => Promise<void>
   loadAnomalies: (programId: string) => Promise<void>
 
   loadNotifications: (programId: string) => Promise<void>
-  previewAudience: (programId: string, targetSegment?: AudienceFilter['segment'], targetFilters?: AudienceFilter) => Promise<number>
+  previewAudience: (programId: string, targetSegment?: AudienceFilter['segment'], targetFilters?: AudienceFilter, branchIds?: string[]) => Promise<number>
   sendNotification: (programId: string, body: {
     title: string; message: string; channels: NotificationChannel[]
     targetSegment?: AudienceFilter['segment']; targetFilters?: AudienceFilter
+    /** Solo clientes que han visitado estas sucursales. */
+    branchIds?: string[]
+    /** ISO — si viene, se guarda como programada y la envía el servidor a esa hora. */
+    scheduledFor?: string
   }) => Promise<LoyaltyNotification>
 }
 
@@ -294,16 +299,14 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     set(s => ({ rewards: s.rewards.filter(r => r.id !== rewardId) }))
   },
 
-  loadAnalytics: async (programId, startDate, endDate) => {
+  loadAnalytics: async (programId, startDate, endDate, branchId) => {
     const requestGeneration = get().requestGeneration
     set({ isLoadingAnalytics: true })
     try {
-      // tz = zona del navegador del merchant; el backend agrupa días/horas con ella.
-      const params = new URLSearchParams({
-        startDate,
-        endDate,
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      })
+      // Sin ?tz: el backend agrupa días/horas con la zona configurada del negocio
+      // (Ajustes), la misma que usan campañas y automatizaciones.
+      const params = new URLSearchParams({ startDate, endDate })
+      if (branchId) params.set('branchId', branchId)
       const analytics = await api.get<AnalyticsData>(`/api/v1/loyalty/programs/${programId}/analytics?${params}`)
       if (get().requestGeneration !== requestGeneration) return
       set({ analytics, isLoadingAnalytics: false })
@@ -339,8 +342,10 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     }
   },
 
-  previewAudience: async (programId, targetSegment, targetFilters) => {
-    const res = await api.post<{ count: number }>(`/api/v1/loyalty/programs/${programId}/notifications/preview`, { targetSegment, targetFilters })
+  previewAudience: async (programId, targetSegment, targetFilters, branchIds) => {
+    const res = await api.post<{ count: number }>(`/api/v1/loyalty/programs/${programId}/notifications/preview`, {
+      targetSegment, targetFilters, branchIds: branchIds?.length ? branchIds : undefined,
+    })
     return res.count
   },
 

@@ -10,6 +10,10 @@ export interface LoyaltyBusinessInfo {
   socials?: { instagram?: string; facebook?: string }
   /** Visual pass options persisted with the merchant's public business data. */
   design?: LoyaltyPassDesignConfig
+  /** Enlace "escribir reseña" de Google: reverso del pass + automatización review_request. */
+  googleReviewUrl?: string
+  /** Geolocalización opcional del pass de Apple Wallet (apagada por defecto). */
+  geo?: { enabled: boolean; relevantText?: string }
 }
 
 export interface CustomRegistrationField {
@@ -179,6 +183,19 @@ export interface AnalyticsData {
   scansByHour?: number[]
   topReturningCustomers?: TopReturningCustomer[]
   recentRegistrations?: RecentRegistration[]
+  branchId?: string | null
+  /** De los clientes que vinieron en el periodo, fracción (0-1) que ya había venido antes o vino 2+ veces. */
+  returnRate?: number
+  returningCustomersInPeriod?: number
+  visitingCustomersInPeriod?: number
+  scansByBranch?: BranchScans[]
+}
+
+export interface BranchScans {
+  branchId: string
+  /** null = el branchId no es una sucursal de Loyalty (p. ej. viene del POS). */
+  name: string | null
+  scans: number
 }
 
 export interface TopReturningCustomer {
@@ -214,10 +231,65 @@ export interface MerchantProfile {
   phone: string | null
   plan: string
   mostradorSessionSeconds: number
+  timeZone?: string
+}
+
+/** Quién está en sesión: el dueño de la cuenta o un admin del equipo. */
+export interface CurrentUser {
+  id: string
+  name: string
+  email: string
+  role: 'owner' | 'admin'
 }
 
 export interface MerchantLocation {
   id: string
   name: string
   isActive: boolean
+  address?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
+export interface TeamUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  createdAt: string
+  lastLoginAt: string | null
+}
+
+export type AutomationTrigger = 'birthday' | 'inactivity' | 'reward_unlocked' | 'review_request'
+
+export interface AutomationRule {
+  trigger: AutomationTrigger
+  isActive: boolean
+  inactivityDays: number | null
+  afterVisits: number | null
+  titleTemplate: string
+  messageTemplate: string
+  channels: NotificationChannel[]
+}
+
+export interface LoyaltyCampaign {
+  id: string
+  programId: string
+  type: string
+  name: string
+  description: string | null
+  isActive: boolean
+  startsAt: string | null
+  endsAt: string | null
+  /** 0 = domingo. Vacío = todos los días. */
+  daysOfWeek: number[]
+  timeWindowStart: string | null
+  timeWindowEnd: string | null
+  /** Vacío = todas las sucursales. */
+  applicableBranchIds: string[]
+  /** Prisma Decimal llega como string. */
+  multiplier: string | number | null
+  notificationTitle: string | null
+  notificationMessage: string | null
+  createdAt: string
 }

@@ -13,6 +13,9 @@ import { Transactions } from '@/pages/Transactions'
 import { Anomalies } from '@/pages/Anomalies'
 import { RegistrationFields } from '@/pages/RegistrationFields'
 import { Notifications } from '@/pages/Notifications'
+import { Automations } from '@/pages/Automations'
+import { Campaigns } from '@/pages/Campaigns'
+import { PassExtras } from '@/pages/PassExtras'
 import { Settings } from '@/pages/Settings'
 import { Layout } from '@/components/Layout'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -40,6 +43,9 @@ export default function App() {
               <Route path="anomalias" element={<Anomalies />} />
               <Route path="datos-a-solicitar" element={<RegistrationFields />} />
               <Route path="notificaciones" element={<Notifications />} />
+              <Route path="automatizaciones" element={<Automations />} />
+              <Route path="campanas" element={<Campaigns />} />
+              <Route path="resenas-y-cercania" element={<PassExtras />} />
             </Route>
             <Route path="/ajustes" element={<Settings />} />
           </Route>

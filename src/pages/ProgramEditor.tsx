@@ -351,7 +351,12 @@ export function ProgramEditor() {
   }
 
   function buildBusinessInfo(): LoyaltyBusinessInfo {
+    // El PUT reemplaza businessInfo completo: se conserva lo que se configura
+    // en otras pestañas (enlace de reseñas, aviso de cercanía) y solo se pisa
+    // el diseño. Antes esto mandaba solo { design } y borraba todo lo demás.
+    const saved = isEditing && programId ? programs.find(p => p.program.id === programId)?.program.businessInfo : null
     return {
+      ...(saved ?? {}),
       design: normalizePassDesign(form.design),
     }
   }

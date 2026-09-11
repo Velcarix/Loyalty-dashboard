@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
+import { useAuthStore } from '@/store/authStore'
 import { Icon, type IconName } from '@/components/Icon'
 import { ScanBarChart } from '@/components/ScanBarChart'
 import {
@@ -84,15 +85,17 @@ function downloadRegistrationsCsv(rows: RecentRegistration[], periodLabel: strin
 export function ProgramDashboard() {
   const { programId } = useParams<{ programId: string }>()
   const { analytics, isLoadingAnalytics, loadAnalytics } = useProgramsStore()
+  const locations = useAuthStore(s => s.locations)
   const [period, setPeriod] = useState('week')
+  const [branchId, setBranchId] = useState('')
 
   useEffect(() => {
     if (!programId) return
     const days = PERIODS.find(p => p.key === period)?.days ?? 7
     const end = new Date()
     const start = new Date(Date.now() - days * 86400000)
-    void loadAnalytics(programId, start.toISOString(), end.toISOString())
-  }, [programId, period])
+    void loadAnalytics(programId, start.toISOString(), end.toISOString(), branchId || null)
+  }, [programId, period, branchId])
 
   const periodLabel = PERIODS.find(p => p.key === period)?.label ?? ''
   // En "Hoy" solo hay un día con datos: el más/menos escaneado no dice nada.
@@ -105,6 +108,11 @@ export function ProgramDashboard() {
   const weekdayExtremes = scansByWeekday.length === 7 ? findExtremes(scansByWeekday, WEEKDAY_DISPLAY_ORDER) : null
   const hourExtremes = scansByHour.length === 24 ? findExtremes(scansByHour) : null
   const withEmail = registrations.filter(r => r.email).length
+  const scansByBranch = analytics?.scansByBranch ?? []
+  const maxBranchScans = Math.max(1, ...scansByBranch.map(b => b.scans))
+  const showBranches = locations.length > 1 || scansByBranch.length > 1
+  const branchName = (id: string, fallback: string | null) => locations.find(l => l.id === id)?.name ?? fallback ?? 'Sucursal del POS'
+  const visiting = analytics?.visitingCustomersInPeriod ?? 0
 
   return (
     <div>
@@ -113,6 +121,18 @@ export function ProgramDashboard() {
           <p className="text-sm font-bold text-slate-950">Pulso del programa</p>
           <p className="mt-1 text-sm text-slate-500">Mide la actividad de tus clientes y detecta oportunidades de regreso.</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {showBranches && (
+          <select
+            value={branchId}
+            onChange={e => setBranchId(e.target.value)}
+            aria-label="Sucursal"
+            className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Todas las sucursales</option>
+            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        )}
         <div aria-label="Periodo" className="flex w-fit rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
         {PERIODS.map(p => (
           <button
@@ -124,6 +144,7 @@ export function ProgramDashboard() {
             {p.label}
           </button>
         ))}
+        </div>
         </div>
       </div>
 
@@ -141,6 +162,13 @@ export function ProgramDashboard() {
             <StatCard label="Clientes totales" value={analytics.totalCustomers} icon="user" tone="bg-blue-50 text-primary" />
             <StatCard label="Nuevos" value={analytics.newCustomersInPeriod} icon="plus" tone="bg-teal-50 text-teal-700" />
             <StatCard label="Escaneos" value={analytics.scansInPeriod ?? 0} icon="qrcode" tone="bg-sky-50 text-sky-700" sub={`Visitas registradas · ${periodLabel.toLowerCase()}`} />
+            <StatCard
+              label="Tasa de retorno"
+              value={visiting > 0 ? `${Math.round((analytics.returnRate ?? 0) * 100)}%` : '—'}
+              icon="chart"
+              tone="bg-indigo-50 text-indigo-700"
+              sub={visiting > 0 ? `${analytics.returningCustomersInPeriod ?? 0} de ${visiting} clientes volvieron` : 'Sin visitas en el periodo'}
+            />
             <StatCard label="Activos" value={analytics.activeCustomers} icon="check" tone="bg-emerald-50 text-emerald-700" />
             <StatCard label="En riesgo" value={analytics.atRiskCustomers} icon="shield" tone="bg-amber-50 text-amber-700" />
             <StatCard label="Inactivos" value={analytics.lapsedCustomers} icon="pause" tone="bg-slate-100 text-slate-600" />
@@ -198,6 +226,33 @@ export function ProgramDashboard() {
               )}
             </Panel>
           </div>
+
+          {showBranches && !branchId && scansByBranch.length > 0 && (
+            <Panel title="Escaneos por sucursal" description={`Todas las sucursales · ${periodLabel.toLowerCase()}`}>
+              <ul className="space-y-3">
+                {scansByBranch.map(b => {
+                  const isLocation = locations.some(l => l.id === b.branchId)
+                  const isTop = b.scans === maxBranchScans
+                  return (
+                    <li key={b.branchId} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3">
+                      {isLocation ? (
+                        <button type="button" onClick={() => setBranchId(b.branchId)} title="Ver solo esta sucursal"
+                          className="truncate text-left text-sm font-semibold text-slate-800 underline-offset-2 hover:text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                          {branchName(b.branchId, b.name)}
+                        </button>
+                      ) : (
+                        <span className="truncate text-sm font-semibold text-slate-500">{branchName(b.branchId, b.name)}</span>
+                      )}
+                      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                        <div className={`h-full rounded-full ${isTop ? 'bg-primary' : 'bg-primary/35'}`} style={{ width: `${(b.scans / maxBranchScans) * 100}%` }} />
+                      </div>
+                      <span className="text-sm font-bold tabular-nums text-slate-950">{b.scans}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </Panel>
+          )}
 
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <Panel title="Clientes que más vuelven" description={`Más visitas en el periodo · ${periodLabel.toLowerCase()}`}>

@@ -3,6 +3,9 @@ import QRCode from 'qrcode'
 import { Icon } from '@/components/Icon'
 import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
+import { LocationsSection } from '@/components/settings/LocationsSection'
+import { TeamSection } from '@/components/settings/TeamSection'
+import { TimeZoneSection } from '@/components/settings/TimeZoneSection'
 
 const FRONTEND_URL = (import.meta.env.VITE_PUBLIC_FRONTEND_URL as string | undefined) ?? 'https://joinloyalty.copopos.com'
 const MOSTRADOR_URL = `${FRONTEND_URL}/mostrador`
@@ -11,6 +14,7 @@ const MOSTRADOR_LABEL = MOSTRADOR_URL.replace(/^https?:\/\//, '')
 type MostradorDevice = {
   id: string
   label: string | null
+  locationId: string | null
   createdAt: string
   lastUsedAt: string | null
 }
@@ -25,43 +29,6 @@ function SectionCard({ title, children }: { title: string; children: React.React
     <div className="mb-5 rounded-2xl bg-white p-5 shadow-sm">
       <h3 className="mb-3 text-sm font-bold text-gray-900">{title}</h3>
       {children}
-    </div>
-  )
-}
-
-function LocationRow({ location, onRenamed }: { location: { id: string; name: string }; onRenamed: () => void }) {
-  const [editing, setEditing] = useState(false)
-  const [name, setName] = useState(location.name)
-  const [saving, setSaving] = useState(false)
-
-  async function handleSave() {
-    if (!name.trim()) return
-    setSaving(true)
-    try {
-      await api.put(`/api/v1/merchant/locations/${location.id}`, { name: name.trim() })
-      onRenamed()
-      setEditing(false)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-2 py-2">
-        <input value={name} onChange={e => setName(e.target.value)} autoFocus
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm" />
-        <button onClick={handleSave} disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white">
-          {saving ? '…' : 'Guardar'}
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex items-center justify-between py-2">
-      <span className="text-sm text-gray-700">{location.name}</span>
-      <button onClick={() => setEditing(true)} className="text-xs text-primary">Renombrar</button>
     </div>
   )
 }
@@ -125,7 +92,8 @@ function PairingQr({ code }: { code: string }) {
 }
 
 export function Settings() {
-  const { merchant, locations, posLink, refreshProfile } = useAuthStore()
+  const { merchant, currentUser, locations, posLink, refreshProfile } = useAuthStore()
+  const [mostradorLocationId, setMostradorLocationId] = useState('')
   const [pairingCode, setPairingCode] = useState<{ code: string; expiresAt: string } | null>(null)
   const [generating, setGenerating] = useState(false)
   const [revoking, setRevoking] = useState(false)
@@ -229,6 +197,7 @@ export function Settings() {
 
   function openMostradorModal() {
     setMostradorLabel('Teléfono')
+    setMostradorLocationId(locations[0]?.id ?? '')
     setMostradorPairing(null)
     setMostradorPairingError(null)
     setMostradorModalOpen(true)
@@ -270,7 +239,10 @@ export function Settings() {
     setGeneratingMostradorCode(true)
     setMostradorPairingError(null)
     try {
-      const data = await api.post<MostradorPairingCode>('/api/v1/integrations/pos/mostrador/code', { label: mostradorLabel.trim() || 'Teléfono' })
+      const data = await api.post<MostradorPairingCode>('/api/v1/integrations/pos/mostrador/code', {
+        label: mostradorLabel.trim() || 'Teléfono',
+        locationId: mostradorLocationId || undefined,
+      })
       setMostradorPairing(data)
     } catch (error) {
       setMostradorPairingError(errorMessage(error, 'No pudimos generar el código. Intenta de nuevo.'))
@@ -294,6 +266,28 @@ export function Settings() {
     }
   }
 
+  async function handleChangeDeviceLocation(device: MostradorDevice, locationId: string | null) {
+    setMostradorDevicesError(null)
+    try {
+      await api.put(`/api/v1/integrations/pos/mostrador/devices/${device.id}/location`, { locationId })
+      setMostradorDevices(devices => devices.map(d => d.id === device.id ? { ...d, locationId } : d))
+    } catch (error) {
+      setMostradorDevicesError(errorMessage(error, 'No pudimos cambiar la sucursal del teléfono.'))
+    }
+  }
+
+  const renderDeviceLocationSelect = (device: MostradorDevice) => (
+    <select
+      value={device.locationId ?? ''}
+      onChange={event => void handleChangeDeviceLocation(device, event.target.value || null)}
+      aria-label={`Sucursal de ${device.label || 'este teléfono'}`}
+      className="max-w-[11rem] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
+    >
+      <option value="">Sin sucursal</option>
+      {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+    </select>
+  )
+
   const pairingExpired = Boolean(mostradorPairing) && pairingSecondsLeft === 0
   const pairingMinutes = Math.floor(pairingSecondsLeft / 60)
   const pairingSeconds = String(pairingSecondsLeft % 60).padStart(2, '0')
@@ -310,13 +304,24 @@ export function Settings() {
         <p className="text-xs text-gray-500">{merchant?.email}</p>
         {merchant?.vertical && <p className="mt-1 text-xs text-gray-400">Giro: {merchant.vertical}</p>}
         <span className="mt-2 inline-block rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold uppercase text-primary">{merchant?.plan ?? 'trial'}</span>
-      </SectionCard>
-
-      <SectionCard title="Ubicaciones">
-        {locations.length === 0 ? <p className="text-sm text-gray-400">Sin ubicaciones</p> : (
-          locations.map(l => <LocationRow key={l.id} location={l} onRenamed={refreshProfile} />)
+        {currentUser?.role === 'admin' && (
+          <p className="mt-3 text-xs text-gray-500">Entraste como <strong className="text-gray-700">{currentUser.name}</strong> ({currentUser.email}), administrador del equipo.</p>
         )}
       </SectionCard>
+
+      <SectionCard title="Zona horaria">
+        <TimeZoneSection value={merchant?.timeZone} onSaved={refreshProfile} />
+      </SectionCard>
+
+      <SectionCard title="Sucursales">
+        <LocationsSection locations={locations} onChanged={refreshProfile} />
+      </SectionCard>
+
+      {currentUser?.role === 'owner' && (
+        <SectionCard title="Equipo">
+          <TeamSection />
+        </SectionCard>
+      )}
 
       <SectionCard title="Mostrador de visitas">
         <p className="mb-3 text-xs text-gray-500">
@@ -395,6 +400,7 @@ export function Settings() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold text-slate-800">{device.label || 'Teléfono'}</p>
                           <p className="mt-1 text-xs text-slate-500">Conectado {formatConnectedAt(device.createdAt)}</p>
+                          {locations.length > 1 && <div className="mt-2">{renderDeviceLocationSelect(device)}</div>}
                         </div>
                         <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${dormant ? 'bg-amber-50 text-amber-800' : 'bg-signal-soft text-green-800'}`}>{dormant ? 'Revisar acceso' : 'En uso'}</span>
                       </div>
@@ -409,7 +415,7 @@ export function Settings() {
               <div className="hidden sm:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                    <tr><th className="px-0 py-2">Teléfono</th><th className="py-2">Conectado</th><th className="py-2">Último uso</th><th className="py-2 text-right"><span className="sr-only">Acciones</span></th></tr>
+                    <tr><th className="px-0 py-2">Teléfono</th>{locations.length > 1 && <th className="py-2">Sucursal</th>}<th className="py-2">Conectado</th><th className="py-2">Último uso</th><th className="py-2 text-right"><span className="sr-only">Acciones</span></th></tr>
                   </thead>
                   <tbody>
                     {mostradorDevices.map(device => {
@@ -417,6 +423,7 @@ export function Settings() {
                       return (
                         <tr key={device.id} className="border-b border-slate-50 last:border-0">
                           <td className="py-3.5 pr-3 font-semibold text-slate-800">{device.label || 'Teléfono'}</td>
+                          {locations.length > 1 && <td className="py-3.5 pr-3">{renderDeviceLocationSelect(device)}</td>}
                           <td className="py-3.5 pr-3 text-xs text-slate-500">{formatConnectedAt(device.createdAt)}</td>
                           <td className="py-3.5 pr-3 text-xs font-semibold text-slate-700"><span className={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${dormant ? 'bg-amber-500' : 'bg-signal'}`} aria-hidden="true" />{formatLastUsedAt(device.lastUsedAt)}</td>
                           <td className="py-3.5 text-right"><button type="button" onClick={() => void handleRevokeMostradorDevice(device)} disabled={revokingDeviceId === device.id} className="min-h-11 rounded-lg border border-red-200 px-3 text-xs font-bold text-red-700 transition-[background-color,transform] duration-150 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-100 active:scale-[.97] disabled:opacity-50">{revokingDeviceId === device.id ? 'Revocando…' : 'Revocar'}</button></td>
@@ -443,6 +450,16 @@ export function Settings() {
                   <label className="block text-xs font-bold text-gray-700" htmlFor="mostrador-label">Nombre del teléfono</label>
                   <input ref={mostradorLabelInputRef} id="mostrador-label" value={mostradorLabel} onChange={event => setMostradorLabel(event.target.value)} autoFocus maxLength={80} className="mt-1.5 min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10" placeholder="iPhone de Ana" />
                   <p className="mt-1.5 text-xs text-gray-500">Usa un nombre que te ayude a reconocerlo después.</p>
+                  {locations.length > 1 && (
+                    <>
+                      <label className="mt-4 block text-xs font-bold text-gray-700" htmlFor="mostrador-location">Sucursal</label>
+                      <select id="mostrador-location" value={mostradorLocationId} onChange={event => setMostradorLocationId(event.target.value)}
+                        className="mt-1.5 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10">
+                        {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+                      </select>
+                      <p className="mt-1.5 text-xs text-gray-500">Las visitas que registre este teléfono se contarán en esa sucursal.</p>
+                    </>
+                  )}
                   {mostradorPairingError && <p className="mt-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" role="alert">{mostradorPairingError}</p>}
                   <button type="button" onClick={() => void handleGenerateMostradorCode()} disabled={generatingMostradorCode} className="mt-5 min-h-12 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-sm transition-[background-color,transform] duration-150 hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25 active:scale-[.97] disabled:opacity-50">
                     {generatingMostradorCode ? 'Generando…' : 'Generar código'}

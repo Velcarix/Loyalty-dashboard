@@ -13,6 +13,9 @@ const tabs = [
   { to: 'anomalias', label: 'Anomalías' },
   { to: 'datos-a-solicitar', label: 'Datos a solicitar' },
   { to: 'notificaciones', label: 'Notificaciones' },
+  { to: 'automatizaciones', label: 'Automatizaciones' },
+  { to: 'campanas', label: 'Campañas' },
+  { to: 'resenas-y-cercania', label: 'Reseñas y cercanía' },
 ]
 
 export function ProgramDetailLayout() {

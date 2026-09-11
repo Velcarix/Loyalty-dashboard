@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { api, getToken, setToken, clearToken, setUnauthorizedHandler } from '@/lib/api'
 import { useProgramsStore } from '@/store/programsStore'
-import type { MerchantProfile, MerchantLocation } from '@/types/loyalty'
+import type { CurrentUser, MerchantProfile, MerchantLocation } from '@/types/loyalty'
 
 interface AuthState {
   token: string | null
   merchant: MerchantProfile | null
+  /** Dueño o admin del equipo en sesión — null hasta el primer refreshProfile. */
+  currentUser: CurrentUser | null
   locations: MerchantLocation[]
   posLink: { linked: boolean; since?: string } | null
   isHydrated: boolean
@@ -19,9 +21,12 @@ interface AuthState {
   primaryLocationId: () => string | null
 }
 
+const signedOut = { token: null, merchant: null, currentUser: null, locations: [], posLink: null, isAuthenticated: false }
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   merchant: null,
+  currentUser: null,
   locations: [],
   posLink: null,
   isHydrated: false,
@@ -31,7 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const token = getToken()
     if (!token) {
       useProgramsStore.getState().reset()
-      set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false, isHydrated: true })
+      set({ ...signedOut, isHydrated: true })
       return
     }
     set({ token, isAuthenticated: false, isHydrated: false })
@@ -52,6 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setToken(data.token)
       useProgramsStore.getState().reset()
       set({ token: data.token, merchant: data.merchant, isAuthenticated: true })
+      void get().refreshProfile()
       return { ok: true }
     } catch (err: any) {
       return { ok: false, message: err?.message ?? 'No se pudo crear la cuenta' }
@@ -64,6 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       setToken(data.token)
       useProgramsStore.getState().reset()
       set({ token: data.token, merchant: data.merchant, isAuthenticated: true })
+      void get().refreshProfile()
       return { ok: true }
     } catch (err: any) {
       return { ok: false, message: err?.message ?? 'Credenciales incorrectas' }
@@ -73,24 +80,28 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout() {
     clearToken()
     useProgramsStore.getState().reset()
-    set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false })
+    set(signedOut)
   },
 
   async refreshProfile() {
     const requestToken = getToken()
     if (!requestToken) return false
     try {
-      const data = await api.get<MerchantProfile & { locations: MerchantLocation[]; posLink: { linked: boolean; since?: string } }>('/api/v1/merchant')
+      const data = await api.get<MerchantProfile & {
+        locations: MerchantLocation[]
+        posLink: { linked: boolean; since?: string }
+        currentUser?: CurrentUser
+      }>('/api/v1/merchant')
       if (getToken() !== requestToken) return false
-      const { locations, posLink, ...merchant } = data
-      set({ merchant, locations: locations ?? [], posLink: posLink ?? null, isAuthenticated: true })
+      const { locations, posLink, currentUser, ...merchant } = data
+      set({ merchant, currentUser: currentUser ?? null, locations: locations ?? [], posLink: posLink ?? null, isAuthenticated: true })
       return true
     } catch (error) {
       const status = (error as { status?: number }).status
       if (status === 401 && getToken() === requestToken) {
         clearToken()
         useProgramsStore.getState().reset()
-        set({ token: null, merchant: null, locations: [], posLink: null, isAuthenticated: false })
+        set(signedOut)
       }
       return status === 401 ? false : null
     }

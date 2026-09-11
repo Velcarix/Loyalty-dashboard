@@ -41,26 +41,95 @@ export function RegistrationQrModal({ program, onClose }: Props) {
     link.click()
   }
 
+  // Cartel tamaño carta listo para imprimir o "Guardar como PDF" desde el
+  // diálogo de impresión — sin generar PDF en el servidor. Todo el texto va
+  // por textContent; los colores son hex ya validados por el backend.
   function handlePrint() {
     const canvas = canvasRef.current
     if (!canvas) return
     const win = window.open('', '_blank')
     if (!win) return
-    const { document: printDocument } = win
-    printDocument.title = `QR — ${program.programName}`
-    printDocument.body.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;'
-    const title = printDocument.createElement('h2')
+    const doc = win.document
+    doc.title = `Cartel QR — ${program.programName}`
+    // El color entra al CSS del cartel: solo si es un hex válido.
+    const brand = /^#[0-9a-fA-F]{6}$/.test(program.brandColor) ? program.brandColor : '#2563EB'
+    const ink = /^#[0-9a-fA-F]{3,8}$/.test(textColor) ? textColor : '#FFFFFF'
+
+    const style = doc.createElement('style')
+    style.textContent = `
+      @page { size: letter; margin: 12mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a;
+             -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .poster { min-height: calc(100vh - 2px); display: flex; flex-direction: column; align-items: center; text-align: center;
+                border: 1px solid #e2e8f0; border-radius: 28px; overflow: hidden; }
+      .top { width: 100%; padding: 44px 32px 36px; background: ${brand}; color: ${ink}; }
+      .top img { max-height: 72px; max-width: 220px; object-fit: contain; margin-bottom: 18px; }
+      .top h1 { margin: 0; font-size: 42px; letter-spacing: -0.02em; line-height: 1.05; }
+      .top p { margin: 10px auto 0; max-width: 34ch; font-size: 18px; opacity: .85; }
+      .middle { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; }
+      .cta { margin: 0 0 18px; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; }
+      .qr { width: 300px; height: 300px; padding: 14px; border-radius: 22px; border: 3px solid ${brand}; background: #fff; }
+      ol { list-style: none; padding: 0; margin: 30px 0 0; display: grid; gap: 12px; text-align: left; font-size: 18px; }
+      li { display: flex; align-items: center; gap: 12px; }
+      li span { flex: none; width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center;
+                background: ${brand}; color: ${ink}; font-weight: 800; font-size: 16px; }
+      .foot { padding: 0 24px 26px; font-size: 12px; color: #64748b; word-break: break-all; }
+    `
+
+    const poster = doc.createElement('div')
+    poster.className = 'poster'
+
+    const top = doc.createElement('div')
+    top.className = 'top'
+    if (program.logoUrl) {
+      const logo = doc.createElement('img')
+      logo.src = program.logoUrl
+      logo.alt = ''
+      top.appendChild(logo)
+    }
+    const title = doc.createElement('h1')
     title.textContent = program.programName
-    const image = printDocument.createElement('img')
-    image.src = canvas.toDataURL('image/png')
-    image.width = 300
-    image.height = 300
-    image.alt = `QR de registro de ${program.programName}`
-    const instruction = printDocument.createElement('p')
-    instruction.textContent = 'Escanea para unirte'
-    printDocument.body.replaceChildren(title, image, instruction)
-    win.focus()
-    win.print()
+    top.appendChild(title)
+    if (program.description) {
+      const description = doc.createElement('p')
+      description.textContent = program.description
+      top.appendChild(description)
+    }
+
+    const middle = doc.createElement('div')
+    middle.className = 'middle'
+    const cta = doc.createElement('p')
+    cta.className = 'cta'
+    cta.textContent = 'Únete gratis a nuestra tarjeta'
+    const qr = doc.createElement('img')
+    qr.className = 'qr'
+    qr.src = canvas.toDataURL('image/png')
+    qr.alt = `QR de registro de ${program.programName}`
+    const steps = doc.createElement('ol')
+    ;['Escanea este código con la cámara', 'Regístrate con tu teléfono', 'Guarda tu tarjeta en Apple Wallet o Google Wallet'].forEach((text, index) => {
+      const item = doc.createElement('li')
+      const number = doc.createElement('span')
+      number.textContent = String(index + 1)
+      item.append(number, doc.createTextNode(text))
+      steps.appendChild(item)
+    })
+    middle.append(cta, qr, steps)
+
+    const foot = doc.createElement('p')
+    foot.className = 'foot'
+    foot.textContent = registerUrl
+
+    poster.append(top, middle, foot)
+    doc.head.appendChild(style)
+    doc.body.replaceChildren(poster)
+
+    // Esperar a que carguen logo y QR: si no, el diálogo de impresión sale sin ellos.
+    const images = Array.from(doc.images)
+    void Promise.all(images.map(img => img.decode().catch(() => undefined))).then(() => {
+      win.focus()
+      win.print()
+    })
   }
 
   return (
@@ -97,8 +166,8 @@ export function RegistrationQrModal({ program, onClose }: Props) {
           <button onClick={handleDownload} className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-semibold text-gray-700">
             Descargar
           </button>
-          <button onClick={handlePrint} className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-white">
-            Imprimir
+          <button onClick={handlePrint} title="Imprime el cartel o guárdalo como PDF" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-white">
+            Cartel / PDF
           </button>
         </div>
       </div>

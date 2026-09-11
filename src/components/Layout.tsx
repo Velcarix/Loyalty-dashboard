@@ -8,7 +8,7 @@ const navItems: { to: string; label: string; icon: IconName }[] = [
 ]
 
 export function Layout() {
-  const { merchant, logout } = useAuthStore()
+  const { merchant, currentUser, logout } = useAuthStore()
   const navigate = useNavigate()
 
   function handleLogout() {
@@ -44,7 +44,10 @@ export function Layout() {
         </nav>
         <div className="m-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <p className="truncate text-sm font-bold text-slate-900">{merchant?.businessName}</p>
-          <p className="mt-0.5 truncate text-xs text-slate-500">{merchant?.email}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500">{currentUser?.email ?? merchant?.email}</p>
+          {currentUser?.role === 'admin' && (
+            <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-wide text-slate-400">Admin · {currentUser.name}</p>
+          )}
           <button
             onClick={handleLogout}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2 text-xs font-bold text-slate-600 transition hover:border-slate-300 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98]"
