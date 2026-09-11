@@ -170,6 +170,34 @@ export interface AnalyticsData {
   totalDiscountCents: number
   totalPointsIssued: number
   totalPointsRedeemed: number
+  // Métricas de escaneo — opcionales porque un backend anterior a 2026-09 no las manda.
+  timeZone?: string
+  scansInPeriod?: number
+  /** 7 valores, índice 0 = domingo. */
+  scansByWeekday?: number[]
+  /** 24 valores, hora local del negocio. */
+  scansByHour?: number[]
+  topReturningCustomers?: TopReturningCustomer[]
+  recentRegistrations?: RecentRegistration[]
+}
+
+export interface TopReturningCustomer {
+  customerId: string
+  name: string
+  phone: string
+  email: string | null
+  visitsInPeriod: number
+  totalVisits: number
+  lastVisitAt: string
+}
+
+export interface RecentRegistration {
+  id: string
+  name: string
+  phone: string
+  email: string | null
+  emailConsent: boolean
+  createdAt: string
 }
 
 export interface Anomaly {

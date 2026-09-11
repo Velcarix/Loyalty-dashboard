@@ -298,7 +298,13 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     const requestGeneration = get().requestGeneration
     set({ isLoadingAnalytics: true })
     try {
-      const analytics = await api.get<AnalyticsData>(`/api/v1/loyalty/programs/${programId}/analytics?startDate=${startDate}&endDate=${endDate}`)
+      // tz = zona del navegador del merchant; el backend agrupa días/horas con ella.
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })
+      const analytics = await api.get<AnalyticsData>(`/api/v1/loyalty/programs/${programId}/analytics?${params}`)
       if (get().requestGeneration !== requestGeneration) return
       set({ analytics, isLoadingAnalytics: false })
     } catch {

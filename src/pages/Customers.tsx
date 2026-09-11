@@ -12,8 +12,9 @@ export function Customers() {
 
   useEffect(() => { if (programId) void loadCustomers(programId) }, [programId])
 
+  const query = search.trim().toLowerCase()
   const filtered = customers.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
+    !query || c.name.toLowerCase().includes(query) || c.phone.includes(query) || (c.email ?? '').toLowerCase().includes(query)
   )
 
   async function handleDelete(customerId: string, name: string) {
@@ -34,7 +35,7 @@ export function Customers() {
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
-        placeholder="Buscar por nombre o teléfono…"
+        placeholder="Buscar por nombre, teléfono o correo…"
         className="mb-4 w-full max-w-xs rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-primary focus:outline-none"
       />
       {isLoadingCustomers ? (
@@ -59,6 +60,7 @@ export function Customers() {
                   <td className="px-4 py-3">
                     <p className="font-semibold text-gray-900">{c.name}</p>
                     <p className="text-xs text-gray-400">{c.phone}</p>
+                    {c.email && <p className="text-xs text-gray-500">{c.email}</p>}
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-1">
