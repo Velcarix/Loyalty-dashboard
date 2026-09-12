@@ -4,19 +4,7 @@ import { useProgramsStore } from '@/store/programsStore'
 import { RegistrationQrModal } from '@/components/RegistrationQrModal'
 import { Icon } from '@/components/Icon'
 import { BANNER_RULES, validateImage } from '@/lib/imageValidation'
-
-const tabs = [
-  { to: '', label: 'Dashboard', end: true },
-  { to: 'clientes', label: 'Clientes' },
-  { to: 'rewards', label: 'Recompensas' },
-  { to: 'transacciones', label: 'Transacciones' },
-  { to: 'anomalias', label: 'Anomalías' },
-  { to: 'datos-a-solicitar', label: 'Datos a solicitar' },
-  { to: 'notificaciones', label: 'Notificaciones' },
-  { to: 'automatizaciones', label: 'Automatizaciones' },
-  { to: 'campanas', label: 'Campañas' },
-  { to: 'resenas-y-cercania', label: 'Reseñas y cercanía' },
-]
+import { programSections as tabs } from '@/lib/programSections'
 
 export function ProgramDetailLayout() {
   const { programId } = useParams<{ programId: string }>()
@@ -160,7 +148,8 @@ export function ProgramDetailLayout() {
         <RegistrationQrModal program={program.program} onClose={() => setQrVisible(false)} />
       )}
 
-      <nav aria-label="Secciones del programa" className="mb-6 overflow-x-auto border-b border-slate-200">
+      {/* En desktop las secciones viven en el sidebar (Layout); aquí solo para móvil */}
+      <nav aria-label="Secciones del programa" className="mb-6 overflow-x-auto border-b border-slate-200 md:hidden">
       <div className="flex min-w-max gap-1">
         {tabs.map(tab => (
           <NavLink

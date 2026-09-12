@@ -1,6 +1,8 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { useProgramsStore } from '@/store/programsStore'
 import { Icon, type IconName } from '@/components/Icon'
+import { programSections } from '@/lib/programSections'
 
 const navItems: { to: string; label: string; icon: IconName }[] = [
   { to: '/programas', label: 'Programas', icon: 'program' },
@@ -10,6 +12,9 @@ const navItems: { to: string; label: string; icon: IconName }[] = [
 export function Layout() {
   const { merchant, currentUser, logout } = useAuthStore()
   const navigate = useNavigate()
+  const programMatch = useMatch('/programas/:programId/*')
+  const programId = programMatch?.params.programId !== 'nuevo' ? programMatch?.params.programId : undefined
+  const programName = useProgramsStore(s => (programId ? s.getProgram(programId)?.program.programName : undefined))
 
   function handleLogout() {
     logout()
@@ -27,20 +32,53 @@ export function Layout() {
           <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Loyalty</p>
         </div>
         <nav aria-label="Navegación principal" className="flex-1 space-y-1 px-3 py-4">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${
-                  isActive ? 'bg-primary text-white shadow-sm shadow-primary/25' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`
-              }
-            >
-              <Icon name={item.icon} size={18} />
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const hasSections = item.to === '/programas' && !!programId
+            return (
+              <div key={item.to}>
+                <NavLink
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                      hasSections
+                        ? 'text-slate-900 hover:bg-slate-100'
+                        : isActive ? 'bg-primary text-white shadow-sm shadow-primary/25' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`
+                  }
+                >
+                  <Icon name={item.icon} size={18} />
+                  {item.label}
+                  {hasSections && <Icon name="chevron-down" size={14} className="ml-auto text-slate-400" />}
+                </NavLink>
+                {hasSections && (
+                  <div className="mb-2 ml-[1.35rem] mt-1 border-l border-slate-200 pl-3">
+                    <p className="truncate px-2 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400" title={programName}>
+                      {programName ?? 'Programa'}
+                    </p>
+                    <ul className="space-y-0.5">
+                      {programSections.map(section => (
+                        <li key={section.label}>
+                          <NavLink
+                            to={`/programas/${programId}${section.to ? `/${section.to}` : ''}`}
+                            end={section.end}
+                            className={({ isActive }) =>
+                              `relative block rounded-lg px-2 py-1.5 text-[13px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                                isActive
+                                  ? 'bg-primary/10 text-primary before:absolute before:-left-[13px] before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-primary'
+                                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                              }`
+                            }
+                          >
+                            {section.label}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </nav>
         <div className="m-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
           <p className="truncate text-sm font-bold text-slate-900">{merchant?.businessName}</p>
