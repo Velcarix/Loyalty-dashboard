@@ -41,7 +41,6 @@ export function Notifications() {
   const [title, setTitle] = useState('')
   const [message, setMessage] = useState('')
   const [appleWalletEnabled, setAppleWalletEnabled] = useState(true)
-  const [emailEnabled, setEmailEnabled] = useState(false)
   const [filters, setFilters] = useState<AudienceFilter>({})
   const [branchIds, setBranchIds] = useState<string[]>([])
   const [schedule, setSchedule] = useState(false)
@@ -73,10 +72,7 @@ export function Notifications() {
 
   async function handleSend() {
     if (!programId || !title.trim() || !message.trim()) return
-    const channels: NotificationChannel[] = [
-      ...(appleWalletEnabled ? ['push' as const] : []),
-      ...(emailEnabled ? ['email' as const] : []),
-    ]
+    const channels: NotificationChannel[] = appleWalletEnabled ? ['push'] : []
     if (channels.length === 0) { setResult('Selecciona al menos un canal'); return }
     let scheduledFor: string | undefined
     if (schedule) {
@@ -158,10 +154,6 @@ export function Notifications() {
             <label className="flex items-center gap-2 text-sm text-gray-700">
               <input type="checkbox" checked={appleWalletEnabled} onChange={e => setAppleWalletEnabled(e.target.checked)} />
               Apple/Google Wallet (banner en la tarjeta de quien ya la agregó a su Wallet)
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={emailEnabled} onChange={e => setEmailEnabled(e.target.checked)} />
-              Email (a quien dio su correo y aceptó recibir novedades)
             </label>
           </div>
         </div>
