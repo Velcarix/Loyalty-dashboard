@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Icon, type IconName } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
-import type { AutomationRule, AutomationTrigger, NotificationChannel } from '@/types/loyalty'
+import type { AutomationRule, AutomationTrigger } from '@/types/loyalty'
 
 const META: Record<AutomationTrigger, { title: string; description: string; icon: IconName }> = {
   birthday: {
@@ -53,8 +53,9 @@ function RuleCard({ programId, rule, warning }: { programId: string; rule: Autom
   const meta = META[rule.trigger]
   const dirty = JSON.stringify(draft) !== JSON.stringify(rule)
 
-  async function save(next: AutomationRule) {
-    if (next.channels.length === 0) { setStatus({ tone: 'error', text: 'Elige al menos un canal' }); return }
+  async function save(draftToSave: AutomationRule) {
+    // Wallet es el único canal: al guardar se limpia cualquier 'email' que la regla tuviera antes.
+    const next: AutomationRule = { ...draftToSave, channels: ['push'] }
     setSaving(true)
     setStatus(null)
     try {
@@ -74,10 +75,6 @@ function RuleCard({ programId, rule, warning }: { programId: string; rule: Autom
     } finally {
       setSaving(false)
     }
-  }
-
-  function toggleChannel(channel: NotificationChannel, enabled: boolean) {
-    setDraft(d => ({ ...d, channels: enabled ? [...new Set([...d.channels, channel])] : d.channels.filter(c => c !== channel) }))
   }
 
   return (
@@ -123,12 +120,7 @@ function RuleCard({ programId, rule, warning }: { programId: string; rule: Autom
           <textarea value={draft.messageTemplate} maxLength={300} rows={2} onChange={e => setDraft(d => ({ ...d, messageTemplate: e.target.value }))}
             className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary focus:outline-none" />
         </label>
-        <p className="-mt-1 text-[11px] text-slate-400">Usa <code className="rounded bg-slate-100 px-1">{'{nombre}'}</code> y <code className="rounded bg-slate-100 px-1">{'{negocio}'}</code> para personalizar.</p>
-        <div className="flex flex-wrap gap-4 text-sm text-slate-700">
-          <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft.channels.includes('push')} onChange={e => toggleChannel('push', e.target.checked)} /> Wallet</label>
-          <label className="inline-flex items-center gap-2"><input type="checkbox" checked={draft.channels.includes('email')} onChange={e => toggleChannel('email', e.target.checked)} /> Email (solo a quien aceptó)</label>
-        </div>
-      </div>
+        <p className="-mt-1 text-[11px] text-slate-400">Usa <code className="rounded bg-slate-100 px-1">{'{nombre}'}</code> y <code className="rounded bg-slate-100 px-1">{'{negocio}'}</code> para personalizar.</p>      </div>
 
       <div className="mt-4 flex items-center justify-between gap-3">
         <p className={`text-xs font-semibold ${status?.tone === 'error' ? 'text-red-600' : 'text-emerald-700'}`} role="status">{status?.text ?? ''}</p>
