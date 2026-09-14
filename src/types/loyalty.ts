@@ -118,6 +118,8 @@ export interface LoyaltyCustomer {
   birthdayDate?: string | null
   gender?: string | null
   customFieldValues?: Record<string, string> | null
+  // Aceptó recibir novedades por correo en el registro público.
+  emailConsent?: boolean
   pointsBalance: number
   visitsCount: number
   totalEarnedPoints: number

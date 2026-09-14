@@ -23,6 +23,7 @@ export type IconName =
   | 'sparkles'
   | 'trash'
   | 'upload'
+  | 'download'
   | 'user'
   | 'x'
 
@@ -54,6 +55,7 @@ const paths: Record<IconName, ReactElement> = {
   sparkles: <path d="m12 3-1.2 4.3L7 8.5l3.8 1.2L12 14l1.2-4.3L17 8.5l-3.8-1.2Zm6 10-.7 2.3L15 16l2.3.7ZM6 14l-.6 2-1.9.6 2-.6Z" />,
   trash: <path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 0V4a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />,
   upload: <path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />,
+  download: <path d="M12 4v12m0 0-4-4m4 4 4-4M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />,
   user: <path d="M20 21a8 8 0 0 0-16 0m12-12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />,
   x: <path d="m6 6 12 12M18 6 6 18" />,
 }
