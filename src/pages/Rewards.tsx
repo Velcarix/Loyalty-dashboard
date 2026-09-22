@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
+import { REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig, type RewardConfigDraft } from '@/lib/rewardConfig'
 import type { AudienceFilter, LoyaltyReward, LoyaltyVisitsConfig, RewardType } from '@/types/loyalty'
 
 const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
   { key: 'free_product', label: 'Producto/servicio gratis', hint: 'Ej: corte de cabello gratis' },
   { key: 'pct_discount', label: 'Descuento %', hint: 'Ej: 15% de descuento' },
   { key: 'fixed_discount', label: 'Descuento fijo', hint: 'Ej: $50 de descuento' },
-  { key: 'bxgy', label: 'Compra X lleva Y', hint: 'Ej: 2x1 en bebidas' },
+  { key: 'bxgy', label: 'Lleva N, paga M', hint: 'Ej: 2x1, 3x2' },
   { key: 'vip_exclusive', label: 'Exclusivo VIP', hint: 'Solo para un nivel mínimo' },
 ]
 
@@ -17,29 +18,9 @@ interface Form {
   name: string
   description: string
   pointsRequired: string
-  productName: string
-  discountPct: string
-  discountCents: string
-  buyQty: string
-  getQty: string
-  bonusPoints: string
 }
 
-const FORM_DEFAULTS: Form = {
-  type: 'free_product', name: '', description: '', pointsRequired: '',
-  productName: '', discountPct: '', discountCents: '', buyQty: '2', getQty: '1', bonusPoints: '',
-}
-
-function buildConfig(form: Form): Record<string, unknown> {
-  switch (form.type) {
-    case 'free_product': return { productName: form.productName }
-    case 'pct_discount': return { discountPct: parseInt(form.discountPct) || 0 }
-    case 'fixed_discount': return { discountCents: Math.round((parseFloat(form.discountCents) || 0) * 100) }
-    case 'bxgy': return { productName: form.productName, buyQty: parseInt(form.buyQty) || 1, getQty: parseInt(form.getQty) || 1 }
-    case 'bonus_points': return { bonusPoints: parseInt(form.bonusPoints) || 0 }
-    case 'vip_exclusive': return {}
-  }
-}
+const FORM_DEFAULTS: Form = { type: 'free_product', name: '', description: '', pointsRequired: '' }
 
 export function Rewards() {
   const { programId } = useParams<{ programId: string }>()
@@ -47,6 +28,7 @@ export function Rewards() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<LoyaltyReward | null>(null)
   const [form, setForm] = useState<Form>(FORM_DEFAULTS)
+  const [configDraft, setConfigDraft] = useState<RewardConfigDraft>(REWARD_CONFIG_DEFAULTS)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -127,6 +109,7 @@ export function Rewards() {
     setError('')
     setNotice('')
     setForm(FORM_DEFAULTS)
+    setConfigDraft(REWARD_CONFIG_DEFAULTS)
     setRestricted(false)
     setEligibility({})
     setApplyToExisting(false)
@@ -137,13 +120,8 @@ export function Rewards() {
     setEditing(r)
     setError('')
     setNotice('')
-    const c = r.config ?? {}
-    setForm({
-      type: r.type, name: r.name, description: r.description, pointsRequired: String(r.pointsRequired),
-      productName: String(c.productName ?? ''), discountPct: String(c.discountPct ?? ''),
-      discountCents: c.discountCents ? String(Number(c.discountCents) / 100) : '',
-      buyQty: String(c.buyQty ?? '2'), getQty: String(c.getQty ?? '1'), bonusPoints: String(c.bonusPoints ?? ''),
-    })
+    setForm({ type: r.type, name: r.name, description: r.description, pointsRequired: String(r.pointsRequired) })
+    setConfigDraft(parseRewardConfig(r.config))
     setRestricted(!!r.eligibility)
     setEligibility(r.eligibility ?? {})
     setApplyToExisting(false)
@@ -152,6 +130,11 @@ export function Rewards() {
 
   async function handleSave() {
     if (!programId) return
+    const configError = validateRewardDraft(form.type, configDraft)
+    if (configError) {
+      setError(configError)
+      return
+    }
     setSaving(true)
     setError('')
     setNotice('')
@@ -160,7 +143,7 @@ export function Rewards() {
     try {
       const body = {
         type: form.type, name: form.name.trim(), description: form.description.trim(),
-        pointsRequired: parseInt(form.pointsRequired) || 0, config: buildConfig(form),
+        pointsRequired: parseInt(form.pointsRequired) || 0, config: buildRewardConfig(form.type, configDraft),
         eligibility: restricted ? eligibility : null,
         applyToExistingCustomers: applyToExisting,
       }
@@ -280,27 +263,28 @@ export function Rewards() {
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
             {(form.type === 'free_product' || form.type === 'bxgy') && (
-              <input value={form.productName} onChange={e => setForm(f => ({ ...f, productName: e.target.value }))} placeholder="Producto/servicio a entregar"
+              <input value={configDraft.productName} onChange={e => setConfigDraft(c => ({ ...c, productName: e.target.value }))} placeholder="Producto/servicio a entregar"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             )}
             {form.type === 'pct_discount' && (
-              <input value={form.discountPct} onChange={e => setForm(f => ({ ...f, discountPct: e.target.value }))} type="number" placeholder="% de descuento"
+              <input value={configDraft.discountPct} onChange={e => setConfigDraft(c => ({ ...c, discountPct: e.target.value }))} type="number" min={1} max={100} placeholder="% de descuento"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             )}
             {form.type === 'fixed_discount' && (
-              <input value={form.discountCents} onChange={e => setForm(f => ({ ...f, discountCents: e.target.value }))} type="number" placeholder="Monto ($)"
+              <input value={configDraft.discountCents} onChange={e => setConfigDraft(c => ({ ...c, discountCents: e.target.value }))} type="number" min={0} step="0.01" placeholder="Monto ($)"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             )}
             {form.type === 'bxgy' && (
               <>
-                <input value={form.buyQty} onChange={e => setForm(f => ({ ...f, buyQty: e.target.value }))} type="number" placeholder="Compra"
+                <input value={configDraft.takeQty} onChange={e => setConfigDraft(c => ({ ...c, takeQty: e.target.value }))} type="number" min={2} placeholder="Lleva (ej. 2)"
                   className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                <input value={form.getQty} onChange={e => setForm(f => ({ ...f, getQty: e.target.value }))} type="number" placeholder="Lleva"
+                <input value={configDraft.payQty} onChange={e => setConfigDraft(c => ({ ...c, payQty: e.target.value }))} type="number" min={1} placeholder="Paga (ej. 1)"
                   className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                <p className="text-xs text-gray-400 md:col-span-2">Ej. "Lleva 2, paga 1" = 2x1: se cobra 1 unidad y la otra sale gratis.</p>
               </>
             )}
             {form.type === 'bonus_points' && (
-              <input value={form.bonusPoints} onChange={e => setForm(f => ({ ...f, bonusPoints: e.target.value }))} type="number" placeholder="Puntos bonus"
+              <input value={configDraft.bonusPoints} onChange={e => setConfigDraft(c => ({ ...c, bonusPoints: e.target.value }))} type="number" placeholder="Puntos bonus"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             )}
           </div>
@@ -353,6 +337,7 @@ export function Rewards() {
                 <div>
                   <p className="font-bold text-gray-900">{r.name}{!r.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactiva</span>}</p>
                   <p className="text-xs text-gray-500">{r.description}</p>
+                  <p className="mt-1 text-xs text-gray-500">{describeRewardConfig(r.type, r.config, unitLabel)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} {unitLabel}</span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPES.find(t => t.key === r.type)?.label}</span>
