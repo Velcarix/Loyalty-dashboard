@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Icon, type IconName } from '@/components/Icon'
 import { useProgramsStore } from '@/store/programsStore'
+import { SHOW_GOOGLE_REVIEWS } from '@/lib/featureFlags'
 import type { AutomationRule, AutomationTrigger, NotificationChannel } from '@/types/loyalty'
 
 const META: Record<AutomationTrigger, { title: string; description: string; icon: IconName }> = {
@@ -28,7 +29,12 @@ const META: Record<AutomationTrigger, { title: string; description: string; icon
   },
 }
 
-const ORDER: AutomationTrigger[] = ['reward_unlocked', 'birthday', 'inactivity', 'review_request']
+const ORDER: AutomationTrigger[] = [
+  'reward_unlocked',
+  'birthday',
+  'inactivity',
+  ...(SHOW_GOOGLE_REVIEWS ? (['review_request'] as const) : []),
+]
 
 function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {
   return (
