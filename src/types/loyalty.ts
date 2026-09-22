@@ -242,6 +242,15 @@ export interface CurrentUser {
   role: 'owner' | 'admin'
 }
 
+/** Producto del catálogo del POS vinculado — ver GET /integrations/pos/catalog. */
+export interface PosCatalogProduct {
+  id: string
+  name: string
+  category: string
+  branchId: string
+  branchName: string
+}
+
 export interface MerchantLocation {
   id: string
   name: string

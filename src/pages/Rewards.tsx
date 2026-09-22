@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
-import { REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig, type RewardConfigDraft } from '@/lib/rewardConfig'
+import {
+  REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig,
+  supportsPosProduct, type RewardConfigDraft,
+} from '@/lib/rewardConfig'
 import type { AudienceFilter, LoyaltyReward, LoyaltyVisitsConfig, RewardType } from '@/types/loyalty'
 
 const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
@@ -24,11 +28,18 @@ const FORM_DEFAULTS: Form = { type: 'free_product', name: '', description: '', p
 
 export function Rewards() {
   const { programId } = useParams<{ programId: string }>()
-  const { rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward, getProgram, updateVisitsConfig } = useProgramsStore()
+  const { posLink } = useAuthStore()
+  const {
+    rewards, isLoadingRewards, loadRewards, createReward, updateReward, deleteReward, getProgram, updateVisitsConfig,
+    posCatalog, isLoadingPosCatalog, posCatalogError, loadPosCatalog,
+  } = useProgramsStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<LoyaltyReward | null>(null)
   const [form, setForm] = useState<Form>(FORM_DEFAULTS)
   const [configDraft, setConfigDraft] = useState<RewardConfigDraft>(REWARD_CONFIG_DEFAULTS)
+  // false = mostrar el selector del catálogo del POS en vez del campo de texto
+  // libre — solo tiene efecto cuando posProductPickerAvailable es true.
+  const [manualProductEntry, setManualProductEntry] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -61,6 +72,14 @@ export function Rewards() {
   const unitLabel = 'visitas'
 
   useEffect(() => { if (programId) void loadRewards(programId) }, [programId])
+
+  // El catálogo es del negocio (no del programa) — se carga una vez, solo si
+  // hay un POS vinculado. loadPosCatalog ya es un no-op si ya se cargó o está
+  // cargando (ver programsStore).
+  useEffect(() => { if (posLink?.linked) void loadPosCatalog() }, [posLink?.linked])
+
+  const posProductPickerAvailable = !!posLink?.linked && posCatalogError === null && posCatalog.length > 0
+  const multiBranchCatalog = useMemo(() => new Set(posCatalog.map(p => p.branchId)).size > 1, [posCatalog])
 
   useEffect(() => {
     if (!visitsConfig) return
@@ -110,6 +129,7 @@ export function Rewards() {
     setNotice('')
     setForm(FORM_DEFAULTS)
     setConfigDraft(REWARD_CONFIG_DEFAULTS)
+    setManualProductEntry(false)
     setRestricted(false)
     setEligibility({})
     setApplyToExisting(false)
@@ -121,7 +141,12 @@ export function Rewards() {
     setError('')
     setNotice('')
     setForm({ type: r.type, name: r.name, description: r.description, pointsRequired: String(r.pointsRequired) })
-    setConfigDraft(parseRewardConfig(r.config))
+    const draft = parseRewardConfig(r.config)
+    setConfigDraft(draft)
+    // Si ya estaba ligado a un producto del catálogo, arranca en modo selector
+    // (y lo preselecciona); si no, arranca en texto libre para no perder lo
+    // que ya tenía escrito. El dueño puede cambiar de modo en cualquier caso.
+    setManualProductEntry(!draft.posProductId)
     setRestricted(!!r.eligibility)
     setEligibility(r.eligibility ?? {})
     setApplyToExisting(false)
@@ -262,9 +287,51 @@ export function Rewards() {
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
-            {(form.type === 'free_product' || form.type === 'bxgy') && (
-              <input value={configDraft.productName} onChange={e => setConfigDraft(c => ({ ...c, productName: e.target.value }))} placeholder="Producto/servicio a entregar"
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+            {supportsPosProduct(form.type) && (
+              <div className="md:col-span-2">
+                {posProductPickerAvailable && !manualProductEntry ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={configDraft.posProductId}
+                      onChange={e => {
+                        const selected = posCatalog.find(p => p.id === e.target.value)
+                        setConfigDraft(c => ({ ...c, posProductId: e.target.value, productName: selected?.name ?? c.productName }))
+                      }}
+                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    >
+                      <option value="">Selecciona un producto del catálogo</option>
+                      {posCatalog.map(p => (
+                        <option key={p.id} value={p.id}>{multiBranchCatalog ? `${p.name} — ${p.branchName}` : p.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setManualProductEntry(true)}
+                      className="whitespace-nowrap text-xs font-semibold text-gray-500 underline">
+                      Escribir a mano
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={configDraft.productName}
+                      onChange={e => setConfigDraft(c => ({ ...c, productName: e.target.value, posProductId: '' }))}
+                      placeholder="Producto/servicio a entregar"
+                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    />
+                    {posProductPickerAvailable && (
+                      <button type="button" onClick={() => setManualProductEntry(false)}
+                        className="whitespace-nowrap text-xs font-semibold text-gray-500 underline">
+                        Elegir del catálogo
+                      </button>
+                    )}
+                  </div>
+                )}
+                {posLink?.linked && isLoadingPosCatalog && (
+                  <p className="mt-1 text-xs text-gray-400">Cargando catálogo del POS…</p>
+                )}
+                {posLink?.linked && posCatalogError === 'unavailable' && (
+                  <p className="mt-1 text-xs text-amber-600">No se pudo cargar el catálogo del POS — escribe el producto a mano.</p>
+                )}
+              </div>
             )}
             {form.type === 'pct_discount' && (
               <input value={configDraft.discountPct} onChange={e => setConfigDraft(c => ({ ...c, discountPct: e.target.value }))} type="number" min={1} max={100} placeholder="% de descuento"

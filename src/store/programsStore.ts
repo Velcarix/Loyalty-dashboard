@@ -3,8 +3,10 @@ import { api } from '@/lib/api'
 import type {
   LoyaltyProgram, LoyaltyPointsConfig, LoyaltyVisitsConfig, LoyaltyReward,
   LoyaltyCustomer, LoyaltyTransaction, AnalyticsData, Anomaly,
-  LoyaltyNotification, AudienceFilter, NotificationChannel,
+  LoyaltyNotification, AudienceFilter, NotificationChannel, PosCatalogProduct,
 } from '@/types/loyalty'
+
+export type PosCatalogError = 'not_linked' | 'not_configured' | 'unavailable' | null
 
 export interface ProgramFull {
   program: LoyaltyProgram
@@ -28,6 +30,12 @@ interface ProgramsState {
   isLoadingAnomalies: boolean
   notifications: LoyaltyNotification[]
   isLoadingNotifications: boolean
+
+  // Catálogo del POS vinculado, para el selector de "producto a entregar" en
+  // Recompensas — merchant-wide (no por programa), se carga una vez.
+  posCatalog: PosCatalogProduct[]
+  isLoadingPosCatalog: boolean
+  posCatalogError: PosCatalogError
 
   reset: () => void
   loadPrograms: () => Promise<void>
@@ -78,6 +86,8 @@ interface ProgramsState {
   loadAnomalies: (programId: string) => Promise<void>
 
   loadNotifications: (programId: string) => Promise<void>
+  /** No-op si ya se cargó (o está cargando) y no falló — llamar libremente al abrir Recompensas. */
+  loadPosCatalog: () => Promise<void>
   previewAudience: (programId: string, targetSegment?: AudienceFilter['segment'], targetFilters?: AudienceFilter, branchIds?: string[]) => Promise<number>
   sendNotification: (programId: string, body: {
     title: string; message: string; channels: NotificationChannel[]
@@ -105,6 +115,9 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
   isLoadingAnomalies: false,
   notifications: [],
   isLoadingNotifications: false,
+  posCatalog: [],
+  isLoadingPosCatalog: false,
+  posCatalogError: null,
 
   reset: () => set({
     requestGeneration: get().requestGeneration + 1,
@@ -122,6 +135,9 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     isLoadingAnomalies: false,
     notifications: [],
     isLoadingNotifications: false,
+    posCatalog: [],
+    isLoadingPosCatalog: false,
+    posCatalogError: null,
   }),
 
   loadPrograms: async () => {
@@ -339,6 +355,25 @@ export const useProgramsStore = create<ProgramsState>((set, get) => ({
     } catch {
       if (get().requestGeneration !== requestGeneration) return
       set({ notifications: [], isLoadingNotifications: false })
+    }
+  },
+
+  loadPosCatalog: async () => {
+    const state = get()
+    if (state.isLoadingPosCatalog || state.posCatalog.length > 0) return
+    const requestGeneration = state.requestGeneration
+    set({ isLoadingPosCatalog: true, posCatalogError: null })
+    try {
+      const { products } = await api.get<{ products: PosCatalogProduct[] }>('/api/v1/integrations/pos/catalog')
+      if (get().requestGeneration !== requestGeneration) return
+      set({ posCatalog: products ?? [], isLoadingPosCatalog: false, posCatalogError: null })
+    } catch (err) {
+      if (get().requestGeneration !== requestGeneration) return
+      const code = (err as { code?: string }).code
+      const posCatalogError: PosCatalogError = code === 'NOT_LINKED' ? 'not_linked'
+        : code === 'CATALOG_NOT_CONFIGURED' ? 'not_configured'
+        : 'unavailable'
+      set({ posCatalog: [], isLoadingPosCatalog: false, posCatalogError })
     }
   },
 

@@ -5,11 +5,13 @@ import {
   parseRewardConfig,
   validateRewardDraft,
   describeRewardConfig,
+  supportsPosProduct,
   type RewardConfigDraft,
 } from '@/lib/rewardConfig'
 
 const draft: RewardConfigDraft = {
   productName: '  Helado grande  ',
+  posProductId: '',
   discountPct: '15',
   discountCents: '50',
   takeQty: '3',
@@ -54,6 +56,20 @@ describe('buildRewardConfig', () => {
   it('defaults an invalid discount percentage to zero instead of leaking NaN', () => {
     expect(buildRewardConfig('pct_discount', { ...draft, discountPct: 'abc' })).toStrictEqual({ discountPct: 0 })
   })
+
+  it('includes posProductId for free_product when the owner picked it from the POS catalog', () => {
+    expect(buildRewardConfig('free_product', { ...draft, posProductId: 'prod-123' }))
+      .toStrictEqual({ productName: 'Helado grande', posProductId: 'prod-123' })
+  })
+
+  it('includes posProductId for bxgy the same way', () => {
+    expect(buildRewardConfig('bxgy', { ...draft, posProductId: 'prod-123' }))
+      .toStrictEqual({ productName: 'Helado grande', buyQty: 2, getQty: 1, posProductId: 'prod-123' })
+  })
+
+  it('omits posProductId entirely when the owner typed the product by hand', () => {
+    expect(buildRewardConfig('free_product', draft)).not.toHaveProperty('posProductId')
+  })
 })
 
 describe('parseRewardConfig', () => {
@@ -79,6 +95,25 @@ describe('parseRewardConfig', () => {
   it('falls back to safe defaults for a null or unrelated config', () => {
     expect(parseRewardConfig(null)).toStrictEqual(REWARD_CONFIG_DEFAULTS)
     expect(parseRewardConfig({ productName: 'Café' })).toStrictEqual({ ...REWARD_CONFIG_DEFAULTS, productName: 'Café' })
+  })
+
+  it('reads back a persisted posProductId', () => {
+    expect(parseRewardConfig({ productName: 'Café', posProductId: 'prod-123' })).toStrictEqual({
+      ...REWARD_CONFIG_DEFAULTS, productName: 'Café', posProductId: 'prod-123',
+    })
+  })
+})
+
+describe('supportsPosProduct', () => {
+  it.each([
+    ['free_product', true],
+    ['bxgy', true],
+    ['pct_discount', false],
+    ['fixed_discount', false],
+    ['bonus_points', false],
+    ['vip_exclusive', false],
+  ] as const)('%s → %s', (type, expected) => {
+    expect(supportsPosProduct(type)).toBe(expected)
   })
 })
 

@@ -15,6 +15,9 @@ import type { RewardType } from '@/types/loyalty'
 
 export interface RewardConfigDraft {
   productName: string
+  // Id del producto del POS vinculado, cuando el dueño lo eligió del catálogo
+  // en vez de teclear el nombre a mano — '' = sin ligar (solo productName).
+  posProductId: string
   discountPct: string
   discountCents: string
   takeQty: string
@@ -24,11 +27,17 @@ export interface RewardConfigDraft {
 
 export const REWARD_CONFIG_DEFAULTS: RewardConfigDraft = {
   productName: '',
+  posProductId: '',
   discountPct: '',
   discountCents: '',
   takeQty: '2',
   payQty: '1',
   bonusPoints: '',
+}
+
+/** Tipos donde el dueño entrega/participa un producto — pueden ligarlo al catálogo del POS. */
+export function supportsPosProduct(type: RewardType): boolean {
+  return type === 'free_product' || type === 'bxgy'
 }
 
 function nonNegativeInt(value: string, fallback: number): number {
@@ -60,9 +69,14 @@ function pesosToCents(value: string): number {
  * produce 2 unidades en el ticket con 1 gratis, sin tocar el backend.
  */
 export function buildRewardConfig(type: RewardType, draft: RewardConfigDraft): Record<string, unknown> {
+  // posProductId es opcional en el contrato — solo se manda cuando el dueño
+  // realmente ligó el premio a un producto del catálogo del POS. Sin POS
+  // vinculado (o si lo escribió a mano), el campo se omite por completo en
+  // vez de mandar '' — igual que antes de que existiera este selector.
+  const posProductId = draft.posProductId.trim() || undefined
   switch (type) {
     case 'free_product':
-      return { productName: draft.productName.trim() }
+      return { productName: draft.productName.trim(), ...(posProductId ? { posProductId } : {}) }
     case 'pct_discount':
       return { discountPct: Math.min(100, nonNegativeInt(draft.discountPct, 0)) }
     case 'fixed_discount':
@@ -70,7 +84,10 @@ export function buildRewardConfig(type: RewardType, draft: RewardConfigDraft): R
     case 'bxgy': {
       const takeQty = positiveInt(draft.takeQty, 2)
       const payQty = Math.min(Math.max(nonNegativeInt(draft.payQty, 1), 1), takeQty - 1)
-      return { productName: draft.productName.trim(), buyQty: payQty, getQty: takeQty - payQty }
+      return {
+        productName: draft.productName.trim(), buyQty: payQty, getQty: takeQty - payQty,
+        ...(posProductId ? { posProductId } : {}),
+      }
     }
     case 'bonus_points':
       return { bonusPoints: nonNegativeInt(draft.bonusPoints, 0) }
@@ -86,6 +103,7 @@ export function parseRewardConfig(config: Record<string, unknown> | null | undef
   const getQty = typeof c.getQty === 'number' && c.getQty >= 0 ? c.getQty : Number(REWARD_CONFIG_DEFAULTS.takeQty) - Number(REWARD_CONFIG_DEFAULTS.payQty)
   return {
     productName: typeof c.productName === 'string' ? c.productName : '',
+    posProductId: typeof c.posProductId === 'string' ? c.posProductId : '',
     discountPct: c.discountPct !== undefined && c.discountPct !== null ? String(c.discountPct) : '',
     discountCents: typeof c.discountCents === 'number' && c.discountCents > 0 ? String(c.discountCents / 100) : '',
     takeQty: String(buyQty + getQty),
