@@ -462,7 +462,7 @@ describe('Reward scope editor', () => {
     }))
   })
 
-  it('allows typing a category by hand when there is no POS catalog', async () => {
+  it('without a linked POS it does not offer a scope — only says to link the POS', async () => {
     const program = programFixture('visits')
     const createReward = vi.fn().mockResolvedValue(undefined)
     useProgramsStore.setState({
@@ -475,22 +475,74 @@ describe('Reward scope editor', () => {
     const container = renderRewards(program.id)
     click(findButton(container, '+ Nueva recompensa'))
     click(typeButton(container, 'Descuento %'))
+    expect(container.querySelector('[data-testid="reward-scope"]')).toBeNull()
+    expect(container.querySelector('[data-testid="reward-scope-unavailable"]')?.textContent).toMatch(/Vincula tu POS Copo/)
+    expect(container.querySelector('button[role="radio"]')).toBeNull()
+
     fillBasics(container)
     setValue(container.querySelector('input[placeholder="% de descuento"]') as HTMLInputElement, '10')
-    click(findButton(container, 'Categorías'))
-    setValue(container.querySelector('input[placeholder^="Nombre de la categoría"]') as HTMLInputElement, 'Bebidas')
-    click(findButton(container, 'Agregar categoría'))
-
     await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({ config: { discountPct: 10 } }))
+  })
 
-    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
-      config: { discountPct: 10, scope: { appliesTo: 'categories', categories: ['Bebidas'] } },
-    }))
+  it('with a linked POS there is no free-text entry — only catalog options', () => {
+    const { container } = setupLinkedCatalog()
+    click(typeButton(container, 'Descuento %'))
+    click(findButton(container, 'Categorías'))
+    expect(container.querySelector('[data-testid="reward-scope"] input')).toBeNull()
+    click(findButton(container, 'Productos específicos'))
+    expect(container.querySelector('[data-testid="reward-scope"] input')).toBeNull()
+    expect(container.querySelector('select[aria-label="Agregar producto del catálogo"]')).not.toBeNull()
+  })
+
+  it('shows a stored limit read-only when the POS got unlinked, and lets the owner remove it', async () => {
+    const program = programFixture('visits')
+    const updateReward = vi.fn().mockResolvedValue(undefined)
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [rewardFixture({ config: { discountPct: 15, scope: { appliesTo: 'categories', categories: ['Postres'] } } })],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      updateReward,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, 'Editar'))
+    const scope = container.querySelector('[data-testid="reward-scope"]')
+    expect(scope?.textContent).toMatch(/Limitado a las categorías: Postres/)
+    expect(scope?.textContent).toMatch(/Sin un POS Copo vinculado/)
+    click(findButton(container, 'Quitar límite'))
+    expect(container.querySelector('[data-testid="reward-scope-unavailable"]')).not.toBeNull()
+
+    await act(async () => findButton(container, 'Guardar').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(updateReward).toHaveBeenCalledWith(program.id, 'reward-1', expect.objectContaining({ config: { discountPct: 15 } }))
+  })
+
+  it('tells the owner when the POS catalog could not load', () => {
+    const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [],
+      posCatalogError: 'unavailable',
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, '+ Nueva recompensa'))
+    click(typeButton(container, 'Descuento %'))
+    click(findButton(container, 'Categorías'))
+    expect(container.querySelector('[data-testid="reward-scope"]')?.textContent).toMatch(/No se pudo cargar el catálogo del POS/)
   })
 
   it('reopens a scoped reward with its categories preselected', () => {
     const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
     useProgramsStore.setState({
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [productFixture({ id: 'p-1', category: 'Postres' }), productFixture({ id: 'p-2', category: 'Bebidas' })],
+      posCatalogError: null,
       programs: [{ program, config: null }],
       rewards: [rewardFixture({ config: { discountPct: 15, scope: { appliesTo: 'categories', categories: ['Postres'] } } })],
       isLoadingRewards: false,

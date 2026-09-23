@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { effectiveScopeMode, scopeModesFor, type RewardConfigDraft, type RewardScopeMode } from '@/lib/rewardConfig'
 import type { PosCatalogProduct, RewardType } from '@/types/loyalty'
 
@@ -8,10 +8,14 @@ interface Props {
   type: RewardType
   draft: RewardConfigDraft
   onChange: (patch: ScopePatch) => void
-  // Catálogo del POS vinculado — vacío si no hay POS o no cargó. Sin catálogo
-  // el dueño aún puede escribir categorías/productos a mano (el POS compara
-  // por nombre cuando no hay ids).
+  // El alcance solo lo aplica el POS de Copo al cobrar: sin POS vinculado el
+  // premio se entrega sin ticket (Mostrador) y nadie podría respetar "solo
+  // Bebidas". Por eso sin POS no se ofrece, y con POS solo se elige del
+  // catálogo (nada a mano) para que los nombres siempre coincidan.
+  posLinked: boolean
   catalog: PosCatalogProduct[]
+  catalogLoading: boolean
+  catalogFailed: boolean
 }
 
 function modeLabel(type: RewardType, mode: RewardScopeMode): string {
@@ -32,11 +36,12 @@ function modeHint(type: RewardType, mode: RewardScopeMode): string {
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
-export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
+const chipOn = 'border-primary bg-primary text-white'
+const chipOff = 'border-gray-200 text-gray-600 hover:border-gray-300'
+
+export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, catalogLoading, catalogFailed }: Props) {
   const modes = scopeModesFor(type)
   const mode = effectiveScopeMode(type, draft)
-  const [manualCategory, setManualCategory] = useState('')
-  const [manualProduct, setManualProduct] = useState('')
 
   const catalogCategories = useMemo(() => {
     const names: string[] = []
@@ -57,9 +62,42 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
   }, [catalog])
 
   if (!mode) return null
+  const defaultMode = modes[0]
+  // ¿El premio ya está limitado a parte del ticket? (categorías, o productos en un descuento)
+  const isLimited = mode !== defaultMode
+  const clearLimit = () => onChange({ scopeMode: defaultMode, scopeCategories: [], scopeProducts: [] })
+  const selectedLabels = mode === 'categories' ? draft.scopeCategories : draft.scopeProducts.map(p => p.name)
 
-  // Categorías guardadas que ya no están en el catálogo (o sin POS) — se
-  // muestran igual para que el dueño pueda quitarlas.
+  if (!posLinked) {
+    if (!isLimited) {
+      return (
+        <p className="text-xs text-gray-400 md:col-span-2" data-testid="reward-scope-unavailable">
+          {type === 'bxgy'
+            ? 'Vincula tu POS Copo para aplicar este premio a categorías completas.'
+            : 'Vincula tu POS Copo para limitar este premio a categorías o productos.'}
+        </p>
+      )
+    }
+    // Premio que ya traía un límite pero el POS se desvinculó: se muestra
+    // tal cual para que el dueño sepa qué tiene y pueda quitarlo.
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 md:col-span-2" data-testid="reward-scope">
+        <p className="text-xs font-semibold text-amber-800">
+          Limitado a {mode === 'categories' ? 'las categorías' : 'los productos'}: {selectedLabels.join(', ') || '—'}
+        </p>
+        <p className="mt-1 text-xs text-amber-700">
+          Sin un POS Copo vinculado este límite no se puede aplicar al cobrar.
+        </p>
+        <button type="button" onClick={clearLimit}
+          className="mt-2 text-xs font-semibold text-amber-800 underline">
+          Quitar límite
+        </button>
+      </div>
+    )
+  }
+
+  // Seleccionados que ya no están en el catálogo (se borraron del POS) — se
+  // muestran igual para que el dueño pueda quitarlos.
   const categoryOptions = [
     ...catalogCategories,
     ...draft.scopeCategories.filter(c => !catalogCategories.some(n => sameName(n, c))),
@@ -74,14 +112,6 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
     })
   }
 
-  function addManualCategory() {
-    const value = manualCategory.trim()
-    if (value && !draft.scopeCategories.some(c => sameName(c, value))) {
-      onChange({ scopeCategories: [...draft.scopeCategories, value] })
-    }
-    setManualCategory('')
-  }
-
   function addProduct(name: string) {
     const value = name.trim()
     if (!value || draft.scopeProducts.some(p => sameName(p.name, value))) return
@@ -94,6 +124,11 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
   }
 
   const availableProductNames = catalogProductNames.filter(n => !draft.scopeProducts.some(p => sameName(p.name, n)))
+  const catalogNotice = catalogLoading
+    ? <p className="mt-2 text-xs text-gray-400">Cargando catálogo del POS…</p>
+    : catalogFailed
+      ? <p className="mt-2 text-xs text-amber-600">No se pudo cargar el catálogo del POS. Intenta de nuevo en un momento.</p>
+      : null
 
   return (
     <div className="md:col-span-2" data-testid="reward-scope">
@@ -119,7 +154,7 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
       {mode === 'categories' && (
         <div className="mt-3">
           {categoryOptions.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               {categoryOptions.map(category => {
                 const selected = draft.scopeCategories.some(c => sameName(c, category))
                 return (
@@ -128,9 +163,7 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
                     type="button"
                     aria-pressed={selected}
                     onClick={() => toggleCategory(category)}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                      selected ? 'border-primary bg-primary text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${selected ? chipOn : chipOff}`}
                   >
                     {category}
                   </button>
@@ -138,19 +171,7 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
               })}
             </div>
           )}
-          <div className="flex gap-2">
-            <input
-              value={manualCategory}
-              onChange={e => setManualCategory(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addManualCategory() } }}
-              placeholder={catalogCategories.length > 0 ? 'Otra categoría (escribe el nombre tal cual está en el POS)' : 'Nombre de la categoría, tal cual está en el POS'}
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            />
-            <button type="button" onClick={addManualCategory}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600">
-              Agregar categoría
-            </button>
-          </div>
+          {catalogNotice}
         </div>
       )}
 
@@ -174,25 +195,13 @@ export function RewardScopeEditor({ type, draft, onChange, catalog }: Props) {
               value=""
               onChange={e => addProduct(e.target.value)}
               aria-label="Agregar producto del catálogo"
-              className="mb-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
             >
               <option value="">Agregar producto del catálogo…</option>
               {availableProductNames.map(name => <option key={name} value={name}>{name}</option>)}
             </select>
           )}
-          <div className="flex gap-2">
-            <input
-              value={manualProduct}
-              onChange={e => setManualProduct(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addProduct(manualProduct); setManualProduct('') } }}
-              placeholder="O escribe el nombre del producto a mano"
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
-            />
-            <button type="button" onClick={() => { addProduct(manualProduct); setManualProduct('') }}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600">
-              Agregar producto
-            </button>
-          </div>
+          {catalogNotice}
         </div>
       )}
     </div>

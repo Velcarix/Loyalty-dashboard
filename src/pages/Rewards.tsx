@@ -367,7 +367,10 @@ export function Rewards() {
               type={form.type}
               draft={configDraft}
               onChange={patch => setConfigDraft(c => ({ ...c, ...patch }))}
+              posLinked={!!posLink?.linked}
               catalog={posLink?.linked && posCatalogError === null ? posCatalog : []}
+              catalogLoading={isLoadingPosCatalog}
+              catalogFailed={!!posLink?.linked && posCatalogError !== null}
             />
             {form.type === 'bonus_points' && (
               <input value={configDraft.bonusPoints} onChange={e => setConfigDraft(c => ({ ...c, bonusPoints: e.target.value }))} type="number" placeholder="Puntos bonus"
