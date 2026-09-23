@@ -338,3 +338,168 @@ describe('POS catalog picker', () => {
     expect(container.textContent).toContain('No se pudo cargar el catálogo del POS')
   })
 })
+
+describe('Reward scope editor', () => {
+  function click(el: Element) {
+    act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  }
+
+  function typeButton(container: HTMLElement, label: string): HTMLButtonElement {
+    const button = Array.from(container.querySelectorAll('button')).find(b => b.querySelector('p')?.textContent === label)
+    if (!button) throw new Error(`No reward type button "${label}"`)
+    return button
+  }
+
+  function setupLinkedCatalog(createReward = vi.fn().mockResolvedValue(undefined)) {
+    const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [
+        productFixture({ id: 'prod-1', name: 'Café americano', category: 'Bebidas', branchId: 'b1', branchName: 'Centro' }),
+        productFixture({ id: 'prod-9', name: 'Café americano', category: 'Bebidas', branchId: 'b2', branchName: 'Norte' }),
+        productFixture({ id: 'prod-2', name: 'Pastel', category: 'Postres', branchId: 'b1', branchName: 'Centro' }),
+      ],
+      posCatalogError: null,
+      createReward,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, '+ Nueva recompensa'))
+    return { container, program, createReward }
+  }
+
+  function fillBasics(container: HTMLElement) {
+    setValue(container.querySelector('input[placeholder="Nombre"]') as HTMLInputElement, 'Promo')
+    setValue(container.querySelector('input[placeholder="Descripción"]') as HTMLInputElement, 'Promo')
+  }
+
+  it('no longer offers "Exclusivo VIP" when creating a reward', () => {
+    const { container } = setupLinkedCatalog()
+    const labels = Array.from(container.querySelectorAll('button p.font-semibold')).map(p => p.textContent)
+    expect(labels).toEqual(['Producto/servicio gratis', 'Descuento %', 'Descuento fijo', 'Lleva N, paga M'])
+  })
+
+  it('still labels an existing VIP reward in the list', () => {
+    const program = programFixture('visits')
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [rewardFixture({ type: 'vip_exclusive', config: {} })],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+    })
+    expect(renderRewards(program.id).textContent).toContain('Exclusivo VIP')
+  })
+
+  it('does not show a scope picker for a free product', () => {
+    const { container } = setupLinkedCatalog()
+    expect(container.querySelector('[data-testid="reward-scope"]')).toBeNull()
+  })
+
+  it('sends a % discount scoped to a catalog category', async () => {
+    const { container, program, createReward } = setupLinkedCatalog()
+    click(typeButton(container, 'Descuento %'))
+    fillBasics(container)
+    setValue(container.querySelector('input[placeholder="% de descuento"]') as HTMLInputElement, '20')
+    click(findButton(container, 'Categorías'))
+    expect(Array.from(container.querySelectorAll('button[aria-pressed]')).map(b => b.textContent)).toEqual(['Bebidas', 'Postres'])
+    click(findButton(container, 'Bebidas'))
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      type: 'pct_discount',
+      config: { discountPct: 20, scope: { appliesTo: 'categories', categories: ['Bebidas'] } },
+    }))
+  })
+
+  it('sends a fixed discount scoped to a product with the ids of every branch', async () => {
+    const { container, program, createReward } = setupLinkedCatalog()
+    click(typeButton(container, 'Descuento fijo'))
+    fillBasics(container)
+    setValue(container.querySelector('input[placeholder="Monto ($)"]') as HTMLInputElement, '30')
+    click(findButton(container, 'Productos específicos'))
+    setSelectValue(container.querySelector('select[aria-label="Agregar producto del catálogo"]') as HTMLSelectElement, 'Café americano')
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      type: 'fixed_discount',
+      config: { discountCents: 3000, scope: { appliesTo: 'products', products: [{ name: 'Café americano', posProductIds: ['prod-1', 'prod-9'] }] } },
+    }))
+  })
+
+  it('blocks saving a category-scoped discount with no category selected', async () => {
+    const { container, createReward } = setupLinkedCatalog()
+    click(typeButton(container, 'Descuento %'))
+    fillBasics(container)
+    setValue(container.querySelector('input[placeholder="% de descuento"]') as HTMLInputElement, '20')
+    click(findButton(container, 'Categorías'))
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')?.textContent).toMatch(/categoría/i)
+  })
+
+  it('lets a "Lleva N, paga M" apply to a whole category instead of one product', async () => {
+    const { container, program, createReward } = setupLinkedCatalog()
+    click(typeButton(container, 'Lleva N, paga M'))
+    fillBasics(container)
+    click(findButton(container, 'Categorías'))
+    // El selector de producto único desaparece en modo categoría.
+    expect(Array.from(container.querySelectorAll('option')).some(o => o.textContent === 'Selecciona un producto del catálogo')).toBe(false)
+    click(findButton(container, 'Bebidas'))
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      type: 'bxgy',
+      config: { buyQty: 1, getQty: 1, scope: { appliesTo: 'categories', categories: ['Bebidas'] } },
+    }))
+  })
+
+  it('allows typing a category by hand when there is no POS catalog', async () => {
+    const program = programFixture('visits')
+    const createReward = vi.fn().mockResolvedValue(undefined)
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      createReward,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, '+ Nueva recompensa'))
+    click(typeButton(container, 'Descuento %'))
+    fillBasics(container)
+    setValue(container.querySelector('input[placeholder="% de descuento"]') as HTMLInputElement, '10')
+    click(findButton(container, 'Categorías'))
+    setValue(container.querySelector('input[placeholder^="Nombre de la categoría"]') as HTMLInputElement, 'Bebidas')
+    click(findButton(container, 'Agregar categoría'))
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      config: { discountPct: 10, scope: { appliesTo: 'categories', categories: ['Bebidas'] } },
+    }))
+  })
+
+  it('reopens a scoped reward with its categories preselected', () => {
+    const program = programFixture('visits')
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [rewardFixture({ config: { discountPct: 15, scope: { appliesTo: 'categories', categories: ['Postres'] } } })],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+    })
+    const container = renderRewards(program.id)
+    expect(container.textContent).toContain('15% de descuento en Postres')
+    click(findButton(container, 'Editar'))
+    expect(container.querySelector('button[role="radio"][aria-checked="true"]')?.textContent).toBe('Categorías')
+    expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe('Postres')
+  })
+})

@@ -6,6 +6,8 @@ import {
   validateRewardDraft,
   describeRewardConfig,
   supportsPosProduct,
+  scopeModesFor,
+  showsSingleProductPicker,
   type RewardConfigDraft,
 } from '@/lib/rewardConfig'
 
@@ -17,6 +19,9 @@ const draft: RewardConfigDraft = {
   takeQty: '3',
   payQty: '2',
   bonusPoints: '20',
+  scopeMode: 'ticket',
+  scopeCategories: [],
+  scopeProducts: [],
 }
 
 describe('buildRewardConfig', () => {
@@ -168,5 +173,91 @@ describe('describeRewardConfig', () => {
     expect(describeRewardConfig('bxgy', { productName: 'Bebidas', buyQty: 1, getQty: 1 }, 'visitas')).toBe('Lleva 2, paga 1 · Bebidas')
     expect(describeRewardConfig('bonus_points', { bonusPoints: 20 }, 'puntos')).toBe('+20 puntos bonus')
     expect(describeRewardConfig('vip_exclusive', null, 'visitas')).toBe('Exclusivo para el nivel configurado')
+  })
+})
+
+describe('reward scope (a qué parte del ticket aplica)', () => {
+  it('omits scope for a whole-ticket discount — same config as before scope existed', () => {
+    expect(buildRewardConfig('pct_discount', draft)).toStrictEqual({ discountPct: 15 })
+    expect(buildRewardConfig('fixed_discount', draft)).toStrictEqual({ discountCents: 5000 })
+  })
+
+  it('scopes a % discount to categories, trimming and de-duplicating names', () => {
+    const config = buildRewardConfig('pct_discount', {
+      ...draft, scopeMode: 'categories', scopeCategories: [' Bebidas ', 'bebidas', 'Postres'],
+    })
+    expect(config).toStrictEqual({ discountPct: 15, scope: { appliesTo: 'categories', categories: ['Bebidas', 'Postres'] } })
+  })
+
+  it('scopes a fixed discount to specific products with every POS id for that name', () => {
+    const config = buildRewardConfig('fixed_discount', {
+      ...draft, scopeMode: 'products', scopeProducts: [{ name: 'Café americano', posProductIds: ['p1', 'p7'] }],
+    })
+    expect(config).toStrictEqual({
+      discountCents: 5000,
+      scope: { appliesTo: 'products', products: [{ name: 'Café americano', posProductIds: ['p1', 'p7'] }] },
+    })
+  })
+
+  it('builds a bxgy by category without a single productName/posProductId', () => {
+    const config = buildRewardConfig('bxgy', {
+      ...draft, posProductId: 'prod-1', takeQty: '2', payQty: '1', scopeMode: 'categories', scopeCategories: ['Bebidas'],
+    })
+    expect(config).toStrictEqual({ buyQty: 1, getQty: 1, scope: { appliesTo: 'categories', categories: ['Bebidas'] } })
+  })
+
+  it('keeps bxgy by product exactly as before (no scope field)', () => {
+    expect(buildRewardConfig('bxgy', { ...draft, scopeMode: 'products' })).toStrictEqual({ productName: 'Helado grande', buyQty: 2, getQty: 1 })
+  })
+
+  it('never adds scope to free_product, even if the draft carries one', () => {
+    expect(buildRewardConfig('free_product', { ...draft, scopeMode: 'categories', scopeCategories: ['Bebidas'] }))
+      .toStrictEqual({ productName: 'Helado grande' })
+  })
+
+  it('falls back to the first allowed mode when the draft mode does not apply to the type', () => {
+    // El borrador arranca en "ticket"; bxgy no lo admite → producto único.
+    expect(showsSingleProductPicker('bxgy', draft)).toBe(true)
+    expect(showsSingleProductPicker('bxgy', { ...draft, scopeMode: 'categories' })).toBe(false)
+    expect(showsSingleProductPicker('free_product', draft)).toBe(true)
+    expect(showsSingleProductPicker('pct_discount', draft)).toBe(false)
+  })
+
+  it('offers scope modes only where the POS can honor them', () => {
+    expect(scopeModesFor('pct_discount')).toStrictEqual(['ticket', 'categories', 'products'])
+    expect(scopeModesFor('fixed_discount')).toStrictEqual(['ticket', 'categories', 'products'])
+    expect(scopeModesFor('bxgy')).toStrictEqual(['products', 'categories'])
+    expect(scopeModesFor('free_product')).toStrictEqual([])
+  })
+
+  it('round-trips a scoped config through parseRewardConfig', () => {
+    const categories = buildRewardConfig('pct_discount', { ...draft, scopeMode: 'categories', scopeCategories: ['Bebidas'] })
+    expect(parseRewardConfig(categories)).toMatchObject({ scopeMode: 'categories', scopeCategories: ['Bebidas'], scopeProducts: [] })
+    const products = buildRewardConfig('fixed_discount', {
+      ...draft, scopeMode: 'products', scopeProducts: [{ name: 'Café', posProductIds: ['p1'] }],
+    })
+    expect(parseRewardConfig(products)).toMatchObject({ scopeMode: 'products', scopeProducts: [{ name: 'Café', posProductIds: ['p1'] }] })
+  })
+
+  it('ignores a malformed scope instead of crashing', () => {
+    expect(parseRewardConfig({ discountPct: 10, scope: 'bebidas' })).toMatchObject({ scopeMode: 'ticket', scopeCategories: [] })
+    expect(parseRewardConfig({ discountPct: 10, scope: { appliesTo: 'products', products: [null, { name: 1 }] } }))
+      .toMatchObject({ scopeMode: 'products', scopeProducts: [] })
+  })
+
+  it('requires at least one category or product when the discount is scoped', () => {
+    expect(validateRewardDraft('pct_discount', { ...draft, scopeMode: 'categories' })).toMatch(/categoría/i)
+    expect(validateRewardDraft('fixed_discount', { ...draft, scopeMode: 'products' })).toMatch(/producto/i)
+    expect(validateRewardDraft('bxgy', { ...draft, scopeMode: 'categories', productName: '' })).toMatch(/categoría/i)
+    expect(validateRewardDraft('bxgy', { ...draft, scopeMode: 'categories', scopeCategories: ['Bebidas'], productName: '' })).toBeNull()
+  })
+
+  it('mentions the scope in the list summary', () => {
+    expect(describeRewardConfig('pct_discount', { discountPct: 15, scope: { appliesTo: 'categories', categories: ['Bebidas', 'Postres'] } }, 'visitas'))
+      .toBe('15% de descuento en Bebidas, Postres')
+    expect(describeRewardConfig('fixed_discount', { discountCents: 5000, scope: { appliesTo: 'products', products: [{ name: 'Café', posProductIds: [] }] } }, 'visitas'))
+      .toBe('$50 de descuento en Café')
+    expect(describeRewardConfig('bxgy', { buyQty: 1, getQty: 1, scope: { appliesTo: 'categories', categories: ['Bebidas'] } }, 'visitas'))
+      .toBe('Lleva 2, paga 1 · categorías: Bebidas')
   })
 })

@@ -3,9 +3,10 @@ import { useParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
+import { RewardScopeEditor } from '@/components/RewardScopeEditor'
 import {
   REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig,
-  supportsPosProduct, type RewardConfigDraft,
+  showsSingleProductPicker, type RewardConfigDraft,
 } from '@/lib/rewardConfig'
 import type { AudienceFilter, LoyaltyReward, LoyaltyVisitsConfig, RewardType } from '@/types/loyalty'
 
@@ -14,8 +15,20 @@ const REWARD_TYPES: { key: RewardType; label: string; hint: string }[] = [
   { key: 'pct_discount', label: 'Descuento %', hint: 'Ej: 15% de descuento' },
   { key: 'fixed_discount', label: 'Descuento fijo', hint: 'Ej: $50 de descuento' },
   { key: 'bxgy', label: 'Lleva N, paga M', hint: 'Ej: 2x1, 3x2' },
-  { key: 'vip_exclusive', label: 'Exclusivo VIP', hint: 'Solo para un nivel mínimo' },
 ]
+
+// "Exclusivo VIP" ya no se ofrece al crear: no producía ningún beneficio en el
+// canje (effect vacío) y su exclusividad dependía de niveles por puntos que un
+// programa de visitas no tiene — "Restringir a cierto público" cubre ese caso.
+// Se conserva la etiqueta para mostrar premios viejos de ese tipo.
+const REWARD_TYPE_LABELS: Record<RewardType, string> = {
+  free_product: 'Producto/servicio gratis',
+  pct_discount: 'Descuento %',
+  fixed_discount: 'Descuento fijo',
+  bxgy: 'Lleva N, paga M',
+  bonus_points: 'Puntos bonus',
+  vip_exclusive: 'Exclusivo VIP',
+}
 
 interface Form {
   type: RewardType
@@ -287,7 +300,7 @@ export function Rewards() {
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
-            {supportsPosProduct(form.type) && (
+            {showsSingleProductPicker(form.type, configDraft) && (
               <div className="md:col-span-2">
                 {posProductPickerAvailable && !manualProductEntry ? (
                   <div className="flex gap-2">
@@ -350,6 +363,12 @@ export function Rewards() {
                 <p className="text-xs text-gray-400 md:col-span-2">Ej. "Lleva 2, paga 1" = 2x1: se cobra 1 unidad y la otra sale gratis.</p>
               </>
             )}
+            <RewardScopeEditor
+              type={form.type}
+              draft={configDraft}
+              onChange={patch => setConfigDraft(c => ({ ...c, ...patch }))}
+              catalog={posLink?.linked && posCatalogError === null ? posCatalog : []}
+            />
             {form.type === 'bonus_points' && (
               <input value={configDraft.bonusPoints} onChange={e => setConfigDraft(c => ({ ...c, bonusPoints: e.target.value }))} type="number" placeholder="Puntos bonus"
                 className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
@@ -407,7 +426,7 @@ export function Rewards() {
                   <p className="mt-1 text-xs text-gray-500">{describeRewardConfig(r.type, r.config, unitLabel)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} {unitLabel}</span>
-                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPES.find(t => t.key === r.type)?.label}</span>
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPE_LABELS[r.type]}</span>
                     {r.eligibility && (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">Público restringido</span>
                     )}
