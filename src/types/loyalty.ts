@@ -123,6 +123,8 @@ export interface LoyaltyCustomer {
   totalEarnedPoints: number
   hasPendingReward: boolean
   pendingRewardDescription: string | null
+  // Premios guardados: alcanzados y sin canjear (solo en la ficha del cliente).
+  availableRewards?: AvailableReward[]
   segment: 'active' | 'at_risk' | 'lapsed' | 'vip'
   createdAt: string
   lastActivityAt: string | null
@@ -243,10 +245,22 @@ export interface CurrentUser {
 }
 
 /** Producto del catálogo del POS vinculado — ver GET /integrations/pos/catalog. */
+export interface AvailableReward {
+  key: string
+  rewardId: string | null
+  name: string
+  description: string
+  requiredVisits: number
+}
+
 export interface PosCatalogProduct {
   id: string
   name: string
+  // Clave interna de la categoría en Copo (ej. "ICE_CREAM") — es lo que se
+  // guarda en el alcance del premio porque no cambia si la renombran.
   category: string
+  // Nombre visible ("Helados"). Opcional: POS sin actualizar solo mandan la clave.
+  categoryName?: string
   branchId: string
   branchName: string
 }

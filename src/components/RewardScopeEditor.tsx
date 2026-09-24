@@ -36,6 +36,16 @@ function modeHint(type: RewardType, mode: RewardScopeMode): string {
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
+/** Clave de categoría (en minúsculas) → nombre visible, según el catálogo del POS. */
+export function categoryLabels(catalog: PosCatalogProduct[]): Map<string, string> {
+  const labels = new Map<string, string>()
+  for (const p of catalog) {
+    const key = p.category?.trim().toLowerCase()
+    if (key && p.categoryName?.trim() && !labels.has(key)) labels.set(key, p.categoryName.trim())
+  }
+  return labels
+}
+
 const chipOn = 'border-primary bg-primary text-white'
 const chipOff = 'border-gray-200 text-gray-600 hover:border-gray-300'
 
@@ -43,13 +53,18 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
   const modes = scopeModesFor(type)
   const mode = effectiveScopeMode(type, draft)
 
+  // Se guarda la clave de la categoría ("ICE_CREAM"), que no cambia si la
+  // renombran en Copo; al dueño se le muestra el nombre ("Helados").
+  const labelByKey = useMemo(() => categoryLabels(catalog), [catalog])
+  const categoryLabel = (key: string) => labelByKey.get(key.trim().toLowerCase()) ?? key
   const catalogCategories = useMemo(() => {
     const names: string[] = []
     for (const p of catalog) {
       if (p.category?.trim() && !names.some(n => sameName(n, p.category))) names.push(p.category.trim())
     }
-    return names.sort((a, b) => a.localeCompare(b, 'es'))
-  }, [catalog])
+    return names.sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b), 'es'))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, labelByKey])
 
   // Un producto por nombre: en multi-sucursal el mismo producto tiene un id
   // por sucursal, y el premio debe valer en todas.
@@ -66,7 +81,7 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
   // ¿El premio ya está limitado a parte del ticket? (categorías, o productos en un descuento)
   const isLimited = mode !== defaultMode
   const clearLimit = () => onChange({ scopeMode: defaultMode, scopeCategories: [], scopeProducts: [] })
-  const selectedLabels = mode === 'categories' ? draft.scopeCategories : draft.scopeProducts.map(p => p.name)
+  const selectedLabels = mode === 'categories' ? draft.scopeCategories.map(categoryLabel) : draft.scopeProducts.map(p => p.name)
 
   if (!posLinked) {
     if (!isLimited) {
@@ -165,7 +180,7 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
                     onClick={() => toggleCategory(category)}
                     className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${selected ? chipOn : chipOff}`}
                   >
-                    {category}
+                    {categoryLabel(category)}
                   </button>
                 )
               })}

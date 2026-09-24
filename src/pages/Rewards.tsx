@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
-import { RewardScopeEditor } from '@/components/RewardScopeEditor'
+import { RewardScopeEditor, categoryLabels } from '@/components/RewardScopeEditor'
 import {
   REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig,
   showsSingleProductPicker, type RewardConfigDraft,
@@ -92,6 +92,7 @@ export function Rewards() {
   useEffect(() => { if (posLink?.linked) void loadPosCatalog() }, [posLink?.linked])
 
   const posProductPickerAvailable = !!posLink?.linked && posCatalogError === null && posCatalog.length > 0
+  const catalogCategoryLabels = useMemo(() => categoryLabels(posCatalog), [posCatalog])
   const multiBranchCatalog = useMemo(() => new Set(posCatalog.map(p => p.branchId)).size > 1, [posCatalog])
 
   useEffect(() => {
@@ -426,7 +427,7 @@ export function Rewards() {
                 <div>
                   <p className="font-bold text-gray-900">{r.name}{!r.isActive && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">Inactiva</span>}</p>
                   <p className="text-xs text-gray-500">{r.description}</p>
-                  <p className="mt-1 text-xs text-gray-500">{describeRewardConfig(r.type, r.config, unitLabel)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{describeRewardConfig(r.type, r.config, unitLabel, key => catalogCategoryLabels.get(key.trim().toLowerCase()) ?? key)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">{r.pointsRequired} {unitLabel}</span>
                     <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-bold text-accent">{REWARD_TYPE_LABELS[r.type]}</span>

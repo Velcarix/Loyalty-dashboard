@@ -283,10 +283,16 @@ export function validateRewardDraft(type: RewardType, draft: RewardConfigDraft):
 }
 
 /** Resumen legible para la tarjeta de la lista de premios. */
-export function describeRewardConfig(type: RewardType, config: Record<string, unknown> | null | undefined, unitLabel: string): string {
+export function describeRewardConfig(
+  type: RewardType,
+  config: Record<string, unknown> | null | undefined,
+  unitLabel: string,
+  // Clave de categoría del POS ("ICE_CREAM") → nombre visible ("Helados").
+  categoryLabel: (key: string) => string = key => key,
+): string {
   const draft = parseRewardConfig(config)
   const scopeText = draft.scopeMode === 'categories'
-    ? draft.scopeCategories.join(', ')
+    ? draft.scopeCategories.map(categoryLabel).join(', ')
     : draft.scopeMode === 'products' ? draft.scopeProducts.map(p => p.name).join(', ') : ''
   switch (type) {
     case 'free_product':

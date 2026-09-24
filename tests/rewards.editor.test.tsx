@@ -555,3 +555,61 @@ describe('Reward scope editor', () => {
     expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe('Postres')
   })
 })
+
+describe('Nombres de categoría del POS', () => {
+  function click(el: Element) {
+    act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  }
+
+  it('muestra el nombre visible ("Helados") pero guarda la clave interna ("ICE_CREAM")', async () => {
+    const program = programFixture('visits')
+    const createReward = vi.fn().mockResolvedValue(undefined)
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [
+        productFixture({ id: 'p-1', name: 'Helado', category: 'ICE_CREAM', categoryName: 'Helados' }),
+        productFixture({ id: 'p-2', name: 'Café', category: 'bebidas' }),
+      ],
+      posCatalogError: null,
+      createReward,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, '+ Nueva recompensa'))
+    const typeBtn = Array.from(container.querySelectorAll('button')).find(b => b.querySelector('p')?.textContent === 'Descuento %')!
+    click(typeBtn)
+    setValue(container.querySelector('input[placeholder="Nombre"]') as HTMLInputElement, 'Promo')
+    setValue(container.querySelector('input[placeholder="Descripción"]') as HTMLInputElement, 'Promo')
+    setValue(container.querySelector('input[placeholder="% de descuento"]') as HTMLInputElement, '10')
+    click(findButton(container, 'Categorías'))
+
+    const chips = Array.from(container.querySelectorAll('button[aria-pressed]')).map(b => b.textContent)
+    expect(chips).toEqual(['bebidas', 'Helados'])
+    expect(chips).not.toContain('ICE_CREAM')
+    click(findButton(container, 'Helados'))
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      config: { discountPct: 10, scope: { appliesTo: 'categories', categories: ['ICE_CREAM'] } },
+    }))
+  })
+
+  it('la tarjeta del premio muestra el nombre de la categoría', () => {
+    const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [rewardFixture({ config: { discountPct: 15, scope: { appliesTo: 'categories', categories: ['ICE_CREAM'] } } })],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [productFixture({ id: 'p-1', category: 'ICE_CREAM', categoryName: 'Helados' })],
+      posCatalogError: null,
+    })
+    expect(renderRewards(program.id).textContent).toContain('15% de descuento en Helados')
+  })
+})

@@ -149,7 +149,19 @@ export function CustomerDetail() {
             </button>
           </div>
 
-          {customer.hasPendingReward && (
+          {customer.availableRewards && customer.availableRewards.length > 0 ? (
+            <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <p className="flex items-center gap-2 font-semibold">
+                <Icon name="gift" size={16} className="shrink-0" />
+                {customer.availableRewards.length === 1 ? 'Premio guardado' : `${customer.availableRewards.length} premios guardados`}
+              </p>
+              <ul className="mt-1 space-y-0.5 pl-6">
+                {customer.availableRewards.map(r => (
+                  <li key={r.key}>{r.description || r.name} <span className="text-amber-500">· {r.requiredVisits} visitas</span></li>
+                ))}
+              </ul>
+            </div>
+          ) : customer.hasPendingReward && (
             <div className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
               <Icon name="gift" size={16} className="mt-0.5 shrink-0" />
               <span>Premio pendiente: {customer.pendingRewardDescription}</span>
