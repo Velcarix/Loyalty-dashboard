@@ -210,9 +210,16 @@ describe('reward scope (a qué parte del ticket aplica)', () => {
     expect(buildRewardConfig('bxgy', { ...draft, scopeMode: 'products' })).toStrictEqual({ productName: 'Helado grande', buyQty: 2, getQty: 1 })
   })
 
-  it('never adds scope to free_product, even if the draft carries one', () => {
-    expect(buildRewardConfig('free_product', { ...draft, scopeMode: 'categories', scopeCategories: ['Bebidas'] }))
-      .toStrictEqual({ productName: 'Helado grande' })
+  it('free_product: sin opciones sigue siendo el producto único de siempre', () => {
+    expect(buildRewardConfig('free_product', { ...draft, scopeMode: 'products' })).toStrictEqual({ productName: 'Helado grande' })
+  })
+
+  it('free_product: varias opciones (el cliente elige una) o una categoría', () => {
+    const options = [{ name: 'Cono', posProductIds: ['p1'] }, { name: 'Vaso', posProductIds: ['p2'] }]
+    expect(buildRewardConfig('free_product', { ...draft, scopeMode: 'products', scopeProducts: options }))
+      .toStrictEqual({ productName: 'Cono / Vaso', scope: { appliesTo: 'products', products: options } })
+    expect(buildRewardConfig('free_product', { ...draft, scopeMode: 'categories', scopeCategories: ['Helados'] }))
+      .toStrictEqual({ productName: 'Helado grande', scope: { appliesTo: 'categories', categories: ['Helados'] } })
   })
 
   it('falls back to the first allowed mode when the draft mode does not apply to the type', () => {
@@ -227,7 +234,7 @@ describe('reward scope (a qué parte del ticket aplica)', () => {
     expect(scopeModesFor('pct_discount')).toStrictEqual(['ticket', 'categories', 'products'])
     expect(scopeModesFor('fixed_discount')).toStrictEqual(['ticket', 'categories', 'products'])
     expect(scopeModesFor('bxgy')).toStrictEqual(['products', 'categories'])
-    expect(scopeModesFor('free_product')).toStrictEqual([])
+    expect(scopeModesFor('free_product')).toStrictEqual(['products', 'categories'])
   })
 
   it('round-trips a scoped config through parseRewardConfig', () => {

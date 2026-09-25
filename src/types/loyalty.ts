@@ -75,6 +75,10 @@ export interface LoyaltyVisitsConfig {
   // apagado/gris de la marca). Opcional: sin ella, la casilla vacía usa el
   // borde punteado de stampEmptyColor.
   stampEmptyImageUrl?: string | null
+  // Qué es el premio principal (mismo formato que una recompensa del catálogo).
+  // null/ausente = solo texto (rewardDescription), sin efecto en el ticket.
+  rewardType?: RewardType | null
+  rewardConfig?: Record<string, unknown> | null
 }
 
 export type RewardType = 'free_product' | 'pct_discount' | 'fixed_discount' | 'bxgy' | 'bonus_points' | 'vip_exclusive'

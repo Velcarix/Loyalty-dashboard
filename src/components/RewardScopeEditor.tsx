@@ -21,10 +21,16 @@ interface Props {
 function modeLabel(type: RewardType, mode: RewardScopeMode): string {
   if (mode === 'ticket') return 'Toda la cuenta'
   if (mode === 'categories') return 'Categorías'
+  if (type === 'free_product') return 'Productos a elegir'
   return type === 'bxgy' ? 'Un producto' : 'Productos específicos'
 }
 
 function modeHint(type: RewardType, mode: RewardScopeMode): string {
+  if (type === 'free_product') {
+    return mode === 'categories'
+      ? 'El cliente elige uno de estas categorías; sale gratis el de mayor precio que esté en el ticket.'
+      : 'Agrega una o varias opciones: el cliente elige una (ej. cono, vaso o premium) y sale gratis la de mayor precio que esté en el ticket.'
+  }
   if (mode === 'ticket') return 'El descuento se aplica al total del ticket.'
   if (mode === 'categories') {
     return type === 'bxgy'
@@ -63,7 +69,6 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
       if (p.category?.trim() && !names.some(n => sameName(n, p.category))) names.push(p.category.trim())
     }
     return names.sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b), 'es'))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog, labelByKey])
 
   // Un producto por nombre: en multi-sucursal el mismo producto tiene un id
@@ -89,7 +94,9 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
         <p className="text-xs text-gray-400 md:col-span-2" data-testid="reward-scope-unavailable">
           {type === 'bxgy'
             ? 'Vincula tu POS Copo para aplicar este premio a categorías completas.'
-            : 'Vincula tu POS Copo para limitar este premio a categorías o productos.'}
+            : type === 'free_product'
+              ? 'Vincula tu POS Copo para ofrecer varias opciones o una categoría completa.'
+              : 'Vincula tu POS Copo para limitar este premio a categorías o productos.'}
         </p>
       )
     }
@@ -147,7 +154,7 @@ export function RewardScopeEditor({ type, draft, onChange, posLinked, catalog, c
 
   return (
     <div className="md:col-span-2" data-testid="reward-scope">
-      <p className="mb-1.5 text-sm font-semibold text-gray-700">¿A qué aplica?</p>
+      <p className="mb-1.5 text-sm font-semibold text-gray-700">{type === 'free_product' ? '¿Qué producto se lleva gratis?' : '¿A qué aplica?'}</p>
       <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="¿A qué aplica?">
         {modes.map(m => (
           <button

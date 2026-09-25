@@ -204,6 +204,12 @@ describe('Rewards editor', () => {
   })
 })
 
+function bxgyButton(container: HTMLElement): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll('button')).find(b => b.querySelector('p')?.textContent === 'Lleva N, paga M')
+  if (!button) throw new Error('No "Lleva N, paga M" type button')
+  return button
+}
+
 describe('POS catalog picker', () => {
   it('keeps the free-text input when there is no POS linked', () => {
     const program = programFixture('visits')
@@ -238,6 +244,9 @@ describe('POS catalog picker', () => {
 
     const container = renderRewards(program.id)
     act(() => findButton(container, '+ Nueva recompensa').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // El selector de UN producto es de "Lleva N, paga M"; el producto gratis con
+    // catálogo usa la lista de opciones (ver describe 'Producto gratis con opciones').
+    act(() => bxgyButton(container).dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     const select = container.querySelector('select') as HTMLSelectElement
     expect(select).not.toBeNull()
@@ -262,13 +271,16 @@ describe('POS catalog picker', () => {
 
     const container = renderRewards(program.id)
     act(() => findButton(container, '+ Nueva recompensa').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // El selector de UN producto es de "Lleva N, paga M"; el producto gratis con
+    // catálogo usa la lista de opciones (ver describe 'Producto gratis con opciones').
+    act(() => bxgyButton(container).dispatchEvent(new MouseEvent('click', { bubbles: true })))
     setSelectValue(container.querySelector('select') as HTMLSelectElement, 'prod-1')
 
     await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     expect(createReward).toHaveBeenCalledWith(
       program.id,
-      expect.objectContaining({ type: 'free_product', config: { productName: 'Café americano', posProductId: 'prod-1' } }),
+      expect.objectContaining({ type: 'bxgy', config: { productName: 'Café americano', buyQty: 1, getQty: 1, posProductId: 'prod-1' } }),
     )
   })
 
@@ -287,6 +299,9 @@ describe('POS catalog picker', () => {
 
     const container = renderRewards(program.id)
     act(() => findButton(container, '+ Nueva recompensa').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // El selector de UN producto es de "Lleva N, paga M"; el producto gratis con
+    // catálogo usa la lista de opciones (ver describe 'Producto gratis con opciones').
+    act(() => bxgyButton(container).dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     act(() => findButton(container, 'Escribir a mano').dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('input[placeholder="Producto/servicio a entregar"]')).not.toBeNull()
@@ -297,7 +312,7 @@ describe('POS catalog picker', () => {
 
   it('preselects the linked catalog product when editing an existing reward', () => {
     const program = programFixture('visits')
-    const reward = rewardFixture({ type: 'free_product', config: { productName: 'Café americano', posProductId: 'prod-1' } })
+    const reward = rewardFixture({ type: 'bxgy', config: { productName: 'Café americano', posProductId: 'prod-1', buyQty: 1, getQty: 1 } })
     useAuthStore.setState({ posLink: { linked: true } })
     useProgramsStore.setState({
       programs: [{ program, config: null }],
@@ -394,9 +409,11 @@ describe('Reward scope editor', () => {
     expect(renderRewards(program.id).textContent).toContain('Exclusivo VIP')
   })
 
-  it('does not show a scope picker for a free product', () => {
+  it('a free product with the POS catalog offers options instead of a single select', () => {
     const { container } = setupLinkedCatalog()
-    expect(container.querySelector('[data-testid="reward-scope"]')).toBeNull()
+    expect(container.querySelector('[data-testid="reward-scope"]')?.textContent).toMatch(/Qué producto se lleva gratis/)
+    expect(container.querySelector('select[aria-label="Agregar producto del catálogo"]')).not.toBeNull()
+    expect(Array.from(container.querySelectorAll('option')).some(o => o.textContent === 'Selecciona un producto del catálogo')).toBe(false)
   })
 
   it('sends a % discount scoped to a catalog category', async () => {
@@ -611,5 +628,170 @@ describe('Nombres de categoría del POS', () => {
       posCatalogError: null,
     })
     expect(renderRewards(program.id).textContent).toContain('15% de descuento en Helados')
+  })
+})
+
+describe('Producto gratis con opciones', () => {
+  function click(el: Element) {
+    act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  }
+
+  function setup(createReward = vi.fn().mockResolvedValue(undefined)) {
+    const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [
+        productFixture({ id: 'cono', name: 'Helado en cono', category: 'ICE_CREAM', categoryName: 'Helados' }),
+        productFixture({ id: 'vaso', name: 'Helado en vaso', category: 'ICE_CREAM', categoryName: 'Helados' }),
+        productFixture({ id: 'premium', name: 'Helado premium', category: 'ICE_CREAM', categoryName: 'Helados' }),
+      ],
+      posCatalogError: null,
+      createReward,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, '+ Nueva recompensa'))
+    setValue(container.querySelector('input[placeholder="Nombre"]') as HTMLInputElement, 'Helado gratis')
+    setValue(container.querySelector('input[placeholder="Descripción"]') as HTMLInputElement, 'Un helado a elegir')
+    return { container, program, createReward }
+  }
+
+  it('guarda varias opciones: el cliente elige una', async () => {
+    const { container, program, createReward } = setup()
+    const add = () => container.querySelector('select[aria-label="Agregar producto del catálogo"]') as HTMLSelectElement
+    setSelectValue(add(), 'Helado en cono')
+    setSelectValue(add(), 'Helado en vaso')
+    setSelectValue(add(), 'Helado premium')
+
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      type: 'free_product',
+      config: {
+        productName: 'Helado en cono / Helado en vaso / Helado premium',
+        scope: { appliesTo: 'products', products: [
+          { name: 'Helado en cono', posProductIds: ['cono'] },
+          { name: 'Helado en vaso', posProductIds: ['vaso'] },
+          { name: 'Helado premium', posProductIds: ['premium'] },
+        ] },
+      },
+    }))
+  })
+
+  it('con una sola opción conserva productName/posProductId para un POS viejo', async () => {
+    const { container, program, createReward } = setup()
+    setSelectValue(container.querySelector('select[aria-label="Agregar producto del catálogo"]') as HTMLSelectElement, 'Helado en cono')
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      config: { productName: 'Helado en cono', posProductId: 'cono', scope: { appliesTo: 'products', products: [{ name: 'Helado en cono', posProductIds: ['cono'] }] } },
+    }))
+  })
+
+  it('puede ser cualquiera de una categoría', async () => {
+    const { container, program, createReward } = setup()
+    click(findButton(container, 'Categorías'))
+    click(findButton(container, 'Helados'))
+    await act(async () => findButton(container, 'Crear').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(createReward).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      config: expect.objectContaining({ scope: { appliesTo: 'categories', categories: ['ICE_CREAM'] } }),
+    }))
+  })
+
+  it('un producto gratis viejo ligado a un producto se abre como una opción', () => {
+    const program = programFixture('visits')
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: null }],
+      rewards: [rewardFixture({ type: 'free_product', config: { productName: 'Helado en cono', posProductId: 'cono' } })],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [productFixture({ id: 'cono', name: 'Helado en cono' }), productFixture({ id: 'vaso', name: 'Helado en vaso' })],
+      posCatalogError: null,
+    })
+    const container = renderRewards(program.id)
+    click(findButton(container, 'Editar'))
+    expect(container.querySelector('[data-testid="reward-scope"]')?.textContent).toContain('Helado en cono')
+    const add = container.querySelector('select[aria-label="Agregar producto del catálogo"]') as HTMLSelectElement
+    expect(Array.from(add.options).map(o => o.textContent)).toEqual(['Agregar producto del catálogo…', 'Helado en vaso'])
+  })
+})
+
+describe('Premio principal configurable', () => {
+  function click(el: Element) {
+    act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  }
+
+  function visitsConfigFixture(overrides: Record<string, unknown> = {}) {
+    return { programId: 'program-visits', visitsTarget: 10, rewardDescription: 'Helado gratis', maxVisitsPerDay: 1, visualStyle: 'number', ...overrides }
+  }
+
+  function setup(config: Record<string, unknown>) {
+    const program = programFixture('visits')
+    const updateVisitsConfig = vi.fn().mockResolvedValue(undefined)
+    useAuthStore.setState({ posLink: { linked: true } })
+    useProgramsStore.setState({
+      programs: [{ program, config: config as any }],
+      rewards: [],
+      isLoadingRewards: false,
+      loadRewards: vi.fn().mockResolvedValue(undefined),
+      loadPosCatalog: vi.fn().mockResolvedValue(undefined),
+      posCatalog: [productFixture({ id: 'cono', name: 'Helado en cono' }), productFixture({ id: 'vaso', name: 'Helado en vaso' })],
+      posCatalogError: null,
+      updateVisitsConfig,
+    })
+    return { container: renderRewards(program.id), program, updateVisitsConfig }
+  }
+
+  function baseTypeButton(container: HTMLElement, label: string): HTMLButtonElement {
+    const scope = container.querySelector('[data-testid="base-reward-types"]')!
+    const button = Array.from(scope.querySelectorAll('button')).find(b => b.querySelector('p')?.textContent === label)
+    if (!button) throw new Error(`No base type "${label}"`)
+    return button
+  }
+
+  it('por defecto es "Solo texto" y se guarda sin tipo, como antes', async () => {
+    const { container, program, updateVisitsConfig } = setup(visitsConfigFixture())
+    expect(baseTypeButton(container, 'Solo texto').className).toContain('border-primary')
+    await act(async () => findButton(container, 'Guardar premio principal').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(updateVisitsConfig).toHaveBeenCalledWith(program.id, expect.objectContaining({ rewardType: null, rewardConfig: null }))
+  })
+
+  it('se configura como producto gratis con varias opciones', async () => {
+    const { container, program, updateVisitsConfig } = setup(visitsConfigFixture())
+    click(baseTypeButton(container, 'Producto/servicio gratis'))
+    const add = () => container.querySelector('select[aria-label="Agregar producto del catálogo"]') as HTMLSelectElement
+    setSelectValue(add(), 'Helado en cono')
+    setSelectValue(add(), 'Helado en vaso')
+
+    await act(async () => findButton(container, 'Guardar premio principal').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(updateVisitsConfig).toHaveBeenCalledWith(program.id, expect.objectContaining({
+      visitsTarget: 10,
+      rewardDescription: 'Helado gratis',
+      rewardType: 'free_product',
+      rewardConfig: {
+        productName: 'Helado en cono / Helado en vaso',
+        scope: { appliesTo: 'products', products: [{ name: 'Helado en cono', posProductIds: ['cono'] }, { name: 'Helado en vaso', posProductIds: ['vaso'] }] },
+      },
+    }))
+  })
+
+  it('valida la config antes de guardar (descuento sin porcentaje)', async () => {
+    const { container, updateVisitsConfig } = setup(visitsConfigFixture())
+    click(baseTypeButton(container, 'Descuento %'))
+    await act(async () => findButton(container, 'Guardar premio principal').dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(updateVisitsConfig).not.toHaveBeenCalled()
+    expect(container.textContent).toMatch(/porcentaje/i)
+  })
+
+  it('carga la config guardada del premio principal', () => {
+    const { container } = setup(visitsConfigFixture({ rewardType: 'fixed_discount', rewardConfig: { discountCents: 5000 } }))
+    expect(baseTypeButton(container, 'Descuento fijo').className).toContain('border-primary')
+    expect((container.querySelector('input[placeholder="Monto ($)"]') as HTMLInputElement).value).toBe('50')
   })
 })

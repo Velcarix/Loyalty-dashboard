@@ -85,6 +85,10 @@ export function scopeModesFor(type: RewardType): RewardScopeMode[] {
       return ['ticket', 'categories', 'products']
     case 'bxgy':
       return ['products', 'categories']
+    // Producto gratis: el cliente elige UNO entre varias opciones (ej. helado
+    // en cono, vaso o premium) o cualquiera de una categoría.
+    case 'free_product':
+      return ['products', 'categories']
     default:
       return []
   }
@@ -97,9 +101,14 @@ export function effectiveScopeMode(type: RewardType, draft: RewardConfigDraft): 
   return modes.includes(draft.scopeMode) ? draft.scopeMode : modes[0]
 }
 
-/** ¿El editor debe mostrar el selector de un solo producto (free_product, o bxgy por producto)? */
-export function showsSingleProductPicker(type: RewardType, draft: RewardConfigDraft): boolean {
-  return type === 'free_product' || (type === 'bxgy' && effectiveScopeMode(type, draft) === 'products')
+/**
+ * ¿El editor debe mostrar el selector de un solo producto? bxgy por producto
+ * siempre; free_product solo sin catálogo del POS (se escribe a mano) — con
+ * catálogo se eligen las opciones en el editor de alcance.
+ */
+export function showsSingleProductPicker(type: RewardType, draft: RewardConfigDraft, catalogAvailable = false): boolean {
+  if (type === 'free_product') return !catalogAvailable
+  return type === 'bxgy' && effectiveScopeMode(type, draft) === 'products'
 }
 
 function cleanList(values: string[]): string[] {
@@ -120,12 +129,12 @@ function buildScope(type: RewardType, draft: RewardConfigDraft): RewardScope | u
   const mode = effectiveScopeMode(type, draft)
   if (mode === 'categories') return { appliesTo: 'categories', categories: cleanList(draft.scopeCategories) }
   if (mode === 'products' && type !== 'bxgy') {
-    return {
-      appliesTo: 'products',
-      products: draft.scopeProducts
-        .filter(p => p.name.trim())
-        .map(p => ({ name: p.name.trim(), posProductIds: cleanList(p.posProductIds) })),
-    }
+    const products = draft.scopeProducts
+      .filter(p => p.name.trim())
+      .map(p => ({ name: p.name.trim(), posProductIds: cleanList(p.posProductIds) }))
+    // Producto gratis sin opciones elegidas = producto único de siempre (a mano).
+    if (type === 'free_product' && products.length === 0) return undefined
+    return { appliesTo: 'products', products }
   }
   // ticket (o bxgy por producto, que sigue usando productName/posProductId):
   // se omite `scope` — igual que un config de antes de que existiera.
@@ -167,8 +176,21 @@ export function buildRewardConfig(type: RewardType, draft: RewardConfigDraft): R
   // vez de mandar '' — igual que antes de que existiera este selector.
   const posProductId = draft.posProductId.trim() || undefined
   switch (type) {
-    case 'free_product':
+    case 'free_product': {
+      const scope = buildScope(type, draft)
+      if (scope?.appliesTo === 'products') {
+        // productName/posProductId siguen llenos para un POS que no conoce las
+        // opciones: con una sola opción se comporta igual que antes.
+        const [first] = scope.products
+        return scope.products.length === 1
+          ? { productName: first.name, ...(first.posProductIds[0] ? { posProductId: first.posProductIds[0] } : {}), scope }
+          : { productName: scope.products.map(p => p.name).join(' / '), scope }
+      }
+      if (scope?.appliesTo === 'categories') {
+        return { productName: draft.productName.trim() || scope.categories.join(', '), scope }
+      }
       return { productName: draft.productName.trim(), ...(posProductId ? { posProductId } : {}) }
+    }
     case 'pct_discount': {
       const scope = buildScope(type, draft)
       return { discountPct: Math.min(100, nonNegativeInt(draft.discountPct, 0)), ...(scope ? { scope } : {}) }
@@ -245,7 +267,7 @@ function validateScope(type: RewardType, draft: RewardConfigDraft): string | nul
   if (mode === 'categories' && cleanList(draft.scopeCategories).length === 0) {
     return 'Elige al menos una categoría a la que aplica.'
   }
-  if (mode === 'products' && type !== 'bxgy' && !draft.scopeProducts.some(p => p.name.trim())) {
+  if (mode === 'products' && type !== 'bxgy' && type !== 'free_product' && !draft.scopeProducts.some(p => p.name.trim())) {
     return 'Elige al menos un producto al que aplica.'
   }
   return null
@@ -253,8 +275,14 @@ function validateScope(type: RewardType, draft: RewardConfigDraft): string | nul
 
 export function validateRewardDraft(type: RewardType, draft: RewardConfigDraft): string | null {
   switch (type) {
-    case 'free_product':
-      return draft.productName.trim() ? null : 'Indica el producto o servicio a entregar.'
+    case 'free_product': {
+      const scopeError = validateScope(type, draft)
+      if (scopeError) return scopeError
+      if (effectiveScopeMode(type, draft) === 'categories') return null
+      return draft.scopeProducts.some(p => p.name.trim()) || draft.productName.trim()
+        ? null
+        : 'Indica el producto o servicio a entregar.'
+    }
     case 'pct_discount': {
       const pct = Number.parseInt(draft.discountPct, 10)
       if (!(Number.isInteger(pct) && pct > 0 && pct <= 100)) return 'El porcentaje debe ser un entero entre 1 y 100.'
@@ -296,6 +324,8 @@ export function describeRewardConfig(
     : draft.scopeMode === 'products' ? draft.scopeProducts.map(p => p.name).join(', ') : ''
   switch (type) {
     case 'free_product':
+      if (draft.scopeMode === 'categories') return `Gratis: uno de ${scopeText || '—'}`
+      if (draft.scopeMode === 'products' && draft.scopeProducts.length > 1) return `Gratis (a elegir): ${scopeText}`
       return `Gratis: ${draft.productName || '—'}`
     case 'pct_discount':
       return `${draft.discountPct || 0}% de descuento${scopeText ? ` en ${scopeText}` : ''}`

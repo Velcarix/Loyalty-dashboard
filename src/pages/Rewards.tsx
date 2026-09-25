@@ -3,10 +3,11 @@ import { useParams } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useProgramsStore } from '@/store/programsStore'
 import { AudienceFilterEditor } from '@/components/AudienceFilterEditor'
-import { RewardScopeEditor, categoryLabels } from '@/components/RewardScopeEditor'
+import { categoryLabels } from '@/components/RewardScopeEditor'
+import { RewardConfigFields, withLegacyProductAsOption } from '@/components/RewardConfigFields'
 import {
   REWARD_CONFIG_DEFAULTS, buildRewardConfig, parseRewardConfig, validateRewardDraft, describeRewardConfig,
-  showsSingleProductPicker, type RewardConfigDraft,
+  type RewardConfigDraft,
 } from '@/lib/rewardConfig'
 import type { AudienceFilter, LoyaltyReward, LoyaltyVisitsConfig, RewardType } from '@/types/loyalty'
 
@@ -73,6 +74,11 @@ export function Rewards() {
   const [savingBase, setSavingBase] = useState(false)
   const [baseError, setBaseError] = useState('')
   const [baseNotice, setBaseNotice] = useState('')
+  // Qué ES el premio principal ('' = solo texto, sin efecto en el ticket) y su
+  // config — el mismo editor que una recompensa del catálogo.
+  const [baseType, setBaseType] = useState<RewardType | ''>('')
+  const [baseDraft, setBaseDraft] = useState<RewardConfigDraft>(REWARD_CONFIG_DEFAULTS)
+  const [baseManualEntry, setBaseManualEntry] = useState(false)
 
   const programFull = programId ? getProgram(programId) : undefined
   const program = programFull?.program ?? null
@@ -91,15 +97,18 @@ export function Rewards() {
   // cargando (ver programsStore).
   useEffect(() => { if (posLink?.linked) void loadPosCatalog() }, [posLink?.linked])
 
-  const posProductPickerAvailable = !!posLink?.linked && posCatalogError === null && posCatalog.length > 0
   const catalogCategoryLabels = useMemo(() => categoryLabels(posCatalog), [posCatalog])
-  const multiBranchCatalog = useMemo(() => new Set(posCatalog.map(p => p.branchId)).size > 1, [posCatalog])
 
   useEffect(() => {
     if (!visitsConfig) return
     setBaseVisits(String(visitsConfig.visitsTarget ?? ''))
     setBaseReward(visitsConfig.rewardDescription ?? '')
-  }, [visitsConfig?.programId, visitsConfig?.visitsTarget, visitsConfig?.rewardDescription])
+    const type = (visitsConfig.rewardType ?? '') as RewardType | ''
+    const draft = parseRewardConfig(visitsConfig.rewardConfig ?? null)
+    setBaseType(type)
+    setBaseDraft(type ? withLegacyProductAsOption(type, draft) : draft)
+    setBaseManualEntry(!!type && !draft.posProductId && !!draft.productName && draft.scopeProducts.length === 0)
+  }, [visitsConfig?.programId, visitsConfig?.visitsTarget, visitsConfig?.rewardDescription, visitsConfig?.rewardType, JSON.stringify(visitsConfig?.rewardConfig ?? null)])
 
   async function handleSaveBase() {
     if (!programId || !visitsConfig) return
@@ -112,6 +121,13 @@ export function Rewards() {
       setBaseError('Escribe qué se lleva el cliente al llegar a la meta.')
       return
     }
+    if (baseType) {
+      const configError = validateRewardDraft(baseType, baseDraft)
+      if (configError) {
+        setBaseError(configError)
+        return
+      }
+    }
     setSavingBase(true)
     setBaseError('')
     setBaseNotice('')
@@ -122,6 +138,8 @@ export function Rewards() {
         rewardDescription: baseReward.trim(),
         maxVisitsPerDay: visitsConfig.maxVisitsPerDay,
         visualStyle: visitsConfig.visualStyle,
+        rewardType: baseType || null,
+        rewardConfig: baseType ? buildRewardConfig(baseType, baseDraft) : null,
         applyToExistingCustomers: baseApplyExisting,
       })
       setBaseApplyExisting(false)
@@ -155,7 +173,7 @@ export function Rewards() {
     setError('')
     setNotice('')
     setForm({ type: r.type, name: r.name, description: r.description, pointsRequired: String(r.pointsRequired) })
-    const draft = parseRewardConfig(r.config)
+    const draft = withLegacyProductAsOption(r.type, parseRewardConfig(r.config))
     setConfigDraft(draft)
     // Si ya estaba ligado a un producto del catálogo, arranca en modo selector
     // (y lo preselecciona); si no, arranca en texto libre para no perder lo
@@ -245,6 +263,34 @@ export function Rewards() {
             </label>
           </div>
 
+          <div className="mt-4">
+            <p className="mb-1.5 text-sm font-semibold text-gray-700">¿Qué recibe el cliente?</p>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3" data-testid="base-reward-types">
+              {[{ key: '' as const, label: 'Solo texto', hint: 'Se entrega aparte, sin tocar el ticket' }, ...REWARD_TYPES].map(t => (
+                <button key={t.key || 'text'} type="button" onClick={() => setBaseType(t.key)}
+                  className={`rounded-lg border-2 px-3 py-2 text-left text-xs ${baseType === t.key ? 'border-primary bg-primary/5' : 'border-gray-200'}`}>
+                  <p className="font-semibold">{t.label}</p>
+                  <p className="text-gray-400">{t.hint}</p>
+                </button>
+              ))}
+            </div>
+            {baseType && (
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <RewardConfigFields
+                  type={baseType}
+                  draft={baseDraft}
+                  onChange={update => setBaseDraft(update)}
+                  manualProductEntry={baseManualEntry}
+                  onManualProductEntryChange={setBaseManualEntry}
+                  posLinked={!!posLink?.linked}
+                  posCatalog={posCatalog}
+                  isLoadingPosCatalog={isLoadingPosCatalog}
+                  posCatalogError={posCatalogError}
+                />
+              </div>
+            )}
+          </div>
+
           <div className="mt-4 border-t border-gray-100 pt-4">
             <label className="flex items-center justify-between">
               <span className="text-sm font-semibold text-gray-700">Aplicar a usuarios actuales</span>
@@ -301,82 +347,17 @@ export function Rewards() {
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descripción"
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm md:col-span-2" />
-            {showsSingleProductPicker(form.type, configDraft) && (
-              <div className="md:col-span-2">
-                {posProductPickerAvailable && !manualProductEntry ? (
-                  <div className="flex gap-2">
-                    <select
-                      value={configDraft.posProductId}
-                      onChange={e => {
-                        const selected = posCatalog.find(p => p.id === e.target.value)
-                        setConfigDraft(c => ({ ...c, posProductId: e.target.value, productName: selected?.name ?? c.productName }))
-                      }}
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    >
-                      <option value="">Selecciona un producto del catálogo</option>
-                      {posCatalog.map(p => (
-                        <option key={p.id} value={p.id}>{multiBranchCatalog ? `${p.name} — ${p.branchName}` : p.name}</option>
-                      ))}
-                    </select>
-                    <button type="button" onClick={() => setManualProductEntry(true)}
-                      className="whitespace-nowrap text-xs font-semibold text-gray-500 underline">
-                      Escribir a mano
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      value={configDraft.productName}
-                      onChange={e => setConfigDraft(c => ({ ...c, productName: e.target.value, posProductId: '' }))}
-                      placeholder="Producto/servicio a entregar"
-                      className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    />
-                    {posProductPickerAvailable && (
-                      <button type="button" onClick={() => setManualProductEntry(false)}
-                        className="whitespace-nowrap text-xs font-semibold text-gray-500 underline">
-                        Elegir del catálogo
-                      </button>
-                    )}
-                  </div>
-                )}
-                {posLink?.linked && isLoadingPosCatalog && (
-                  <p className="mt-1 text-xs text-gray-400">Cargando catálogo del POS…</p>
-                )}
-                {posLink?.linked && posCatalogError === 'unavailable' && (
-                  <p className="mt-1 text-xs text-amber-600">No se pudo cargar el catálogo del POS — escribe el producto a mano.</p>
-                )}
-              </div>
-            )}
-            {form.type === 'pct_discount' && (
-              <input value={configDraft.discountPct} onChange={e => setConfigDraft(c => ({ ...c, discountPct: e.target.value }))} type="number" min={1} max={100} placeholder="% de descuento"
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-            )}
-            {form.type === 'fixed_discount' && (
-              <input value={configDraft.discountCents} onChange={e => setConfigDraft(c => ({ ...c, discountCents: e.target.value }))} type="number" min={0} step="0.01" placeholder="Monto ($)"
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-            )}
-            {form.type === 'bxgy' && (
-              <>
-                <input value={configDraft.takeQty} onChange={e => setConfigDraft(c => ({ ...c, takeQty: e.target.value }))} type="number" min={2} placeholder="Lleva (ej. 2)"
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                <input value={configDraft.payQty} onChange={e => setConfigDraft(c => ({ ...c, payQty: e.target.value }))} type="number" min={1} placeholder="Paga (ej. 1)"
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                <p className="text-xs text-gray-400 md:col-span-2">Ej. "Lleva 2, paga 1" = 2x1: se cobra 1 unidad y la otra sale gratis.</p>
-              </>
-            )}
-            <RewardScopeEditor
+            <RewardConfigFields
               type={form.type}
               draft={configDraft}
-              onChange={patch => setConfigDraft(c => ({ ...c, ...patch }))}
+              onChange={update => setConfigDraft(update)}
+              manualProductEntry={manualProductEntry}
+              onManualProductEntryChange={setManualProductEntry}
               posLinked={!!posLink?.linked}
-              catalog={posLink?.linked && posCatalogError === null ? posCatalog : []}
-              catalogLoading={isLoadingPosCatalog}
-              catalogFailed={!!posLink?.linked && posCatalogError !== null}
+              posCatalog={posCatalog}
+              isLoadingPosCatalog={isLoadingPosCatalog}
+              posCatalogError={posCatalogError}
             />
-            {form.type === 'bonus_points' && (
-              <input value={configDraft.bonusPoints} onChange={e => setConfigDraft(c => ({ ...c, bonusPoints: e.target.value }))} type="number" placeholder="Puntos bonus"
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-            )}
           </div>
 
           <div className="mt-4 border-t border-gray-100 pt-4">
