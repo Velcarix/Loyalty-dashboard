@@ -20,7 +20,7 @@ describe('pass-design presets', () => {
       expect(preset.description.trim()).not.toBe('')
       expect(isHexColor(preset.brandColor)).toBe(true)
       expect(isHexColor(preset.accentColor)).toBe(true)
-      expect(['solid', 'gradient', 'banner']).toContain(preset.cardStyle)
+      expect(['solid', 'banner']).toContain(preset.cardStyle)
       expect(['#FFFFFF', '#000000']).toContain(getTextColorForBg(preset.brandColor))
       expect(['#FFFFFF', '#000000']).toContain(getTextColorForBg(preset.accentColor))
     }
@@ -33,7 +33,7 @@ describe('pass-design presets', () => {
       id: 'copo',
       brandColor: '#2563EB',
       accentColor: '#2DD4BF',
-      cardStyle: 'gradient',
+      cardStyle: 'solid',
     })
     expect(getBrandPreset('no-existe')).toBeUndefined()
     expect(getBrandPreset('🧋')).toBeUndefined()
@@ -41,6 +41,10 @@ describe('pass-design presets', () => {
 })
 
 describe('pass-design normalization', () => {
+  it('reads a legacy gradient card as solid, because Wallet only supports a solid background', () => {
+    expect(normalizePassDesign({ cardStyle: 'gradient' as never }).cardStyle).toBe('solid')
+  })
+
   it.each([null, undefined, {}, { accentColor: '#fff' }, { accentColor: 'red', cardStyle: 'neon' }])(
     'falls back to the safe default for malformed or absent input: %o',
     input => {
@@ -139,7 +143,7 @@ describe('interactive appearance templates', () => {
 
   it.each([
     ['classic', 'solid', 'plate'],
-    ['stamps', 'gradient', 'plate'],
+    ['stamps', 'solid', 'plate'],
     ['brand', 'banner', 'minimal'],
   ] as const)('applies the %s template composition without replacing merchant color overrides', (template, cardStyle, logoStyle) => {
     const appearance = applyPassTemplate({

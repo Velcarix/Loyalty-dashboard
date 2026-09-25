@@ -32,7 +32,7 @@ function renderEditablePreview(
             design: {
               template: 'stamps',
               accentColor: '#EC4899',
-              cardStyle: 'gradient',
+              cardStyle: 'solid',
               logoStyle: 'plate',
               stampShape: 'rounded',
               stampFilledColor: '#FDF2F8',

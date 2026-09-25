@@ -222,9 +222,8 @@ export function WalletPassPreview({
   const remainingVisits = target ? target - sampleVisits : 0
   const rewardColor = design.rewardColor
   const rewardTextColor = getTextColorForBg(rewardColor)
-  const cardBackground = design.cardStyle === 'gradient'
-    ? `linear-gradient(135deg, ${color} 0%, ${design.accentColor} 145%)`
-    : color
+  // Color sólido siempre: Apple/Google Wallet solo aceptan un color de fondo.
+  const cardBackground = color
   const isBrandTemplate = design.template === 'brand'
   // Mirrors pass-apple.service.ts: the counter only moves into the header
   // (next to the logo) when stamps are the primary visual and there's room
