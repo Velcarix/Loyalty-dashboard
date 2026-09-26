@@ -1,4 +1,9 @@
-export type PassCardStyle = 'solid' | 'gradient' | 'banner'
+/**
+ * 'gradient' ya no existe: Apple/Google Wallet solo aceptan un color sólido de
+ * fondo, así que el degradado nunca se veía en la tarjeta real. Los programas
+ * que lo tenían guardado se leen como 'solid' (ver normalizePassDesign).
+ */
+export type PassCardStyle = 'solid' | 'banner'
 export type PassLogoStyle = 'plate' | 'minimal'
 export type PassStampShape = 'circle' | 'rounded' | 'square' | 'none'
 export type PassTemplate = 'classic' | 'stamps' | 'brand'
@@ -56,7 +61,7 @@ export interface BrandPreset {
 
 export const DEFAULT_PASS_DESIGN: LoyaltyPassDesignConfig = {
   accentColor: '#2DD4BF',
-  cardStyle: 'gradient',
+  cardStyle: 'solid',
   logoStyle: 'plate',
   stampShape: 'circle',
   template: 'classic',
@@ -79,7 +84,7 @@ export const PASS_TEMPLATES: readonly PassTemplateDefinition[] = [
     id: 'stamps',
     name: 'Sellos',
     description: 'Visitas visuales con sello personalizado',
-    cardStyle: 'gradient',
+    cardStyle: 'solid',
     logoStyle: 'plate',
   },
   {
@@ -98,7 +103,7 @@ export const BRAND_PRESETS: readonly BrandPreset[] = [
     description: 'Claro y confiable',
     brandColor: '#2563EB',
     accentColor: '#2DD4BF',
-    cardStyle: 'gradient',
+    cardStyle: 'solid',
   },
   {
     id: 'cacao',
@@ -106,7 +111,7 @@ export const BRAND_PRESETS: readonly BrandPreset[] = [
     description: 'Cálido y artesanal',
     brandColor: '#78350F',
     accentColor: '#F59E0B',
-    cardStyle: 'gradient',
+    cardStyle: 'solid',
   },
   {
     id: 'berry',
@@ -114,7 +119,7 @@ export const BRAND_PRESETS: readonly BrandPreset[] = [
     description: 'Vibrante y cercano',
     brandColor: '#BE185D',
     accentColor: '#FB7185',
-    cardStyle: 'gradient',
+    cardStyle: 'solid',
   },
   {
     id: 'garden',
@@ -162,7 +167,7 @@ export function normalizePassDesign(
     accentColor: design?.accentColor && isHexColor(design.accentColor)
       ? design.accentColor
       : DEFAULT_PASS_DESIGN.accentColor,
-    cardStyle: design?.cardStyle === 'solid' || design?.cardStyle === 'banner' || design?.cardStyle === 'gradient'
+    cardStyle: design?.cardStyle === 'banner'
       ? design.cardStyle
       : DEFAULT_PASS_DESIGN.cardStyle,
     logoStyle: design?.logoStyle === 'minimal' || design?.logoStyle === 'plate'

@@ -587,16 +587,11 @@ export function ProgramEditor() {
 
                 {selectedAppearanceZone === 'background' && (
                   <div className="space-y-4">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="rounded-xl border border-slate-200 p-3">
-                        <span className="mb-2 block text-xs font-bold text-slate-600">Color principal</span>
-                        <span className="flex items-center gap-2"><input type="color" aria-label="Color principal de la tarjeta" value={brandColorInput} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{brandColorInput}</span></span>
-                      </label>
-                      <label className="rounded-xl border border-slate-200 p-3">
-                        <span className="mb-2 block text-xs font-bold text-slate-600">Color de acento</span>
-                        <span className="flex items-center gap-2"><input type="color" aria-label="Color de acento de la tarjeta" value={passDesign.accentColor} onChange={e => updatePassDesign({ accentColor: e.target.value })} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{passDesign.accentColor}</span></span>
-                      </label>
-                    </div>
+                    {/* Sin "color de acento": solo alimentaba el degradado, que Apple/Google Wallet no pueden mostrar. */}
+                    <label className="block rounded-xl border border-slate-200 p-3">
+                      <span className="mb-2 block text-xs font-bold text-slate-600">Color principal</span>
+                      <span className="flex items-center gap-2"><input type="color" aria-label="Color principal de la tarjeta" value={brandColorInput} onChange={e => setForm(f => ({ ...f, brandColor: e.target.value }))} className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono text-xs uppercase text-slate-700">{brandColorInput}</span></span>
+                    </label>
                     <div className="rounded-xl border border-slate-200 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-xs font-bold text-slate-600">Color del texto</span>
@@ -609,10 +604,9 @@ export function ProgramEditor() {
                     </div>
                     <div>
                       <p className="mb-1.5 text-xs font-bold text-slate-600">Estilo de fondo</p>
-                      <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {([
                           ['solid', 'Color pleno', 'layout'],
-                          ['gradient', 'Degradado', 'sparkles'],
                           ['banner', 'Con banner', 'image'],
                         ] as const).map(([style, title, icon]) => (
                           <button key={style} type="button" aria-pressed={passDesign.cardStyle === style} onClick={() => updatePassDesign({ cardStyle: style })}
@@ -626,7 +620,7 @@ export function ProgramEditor() {
                       <div className="mb-1.5 flex items-baseline justify-between gap-3"><p className="text-xs font-bold text-slate-600">Paleta lista para usar</p><span className="text-[11px] text-slate-400">Puedes personalizarla después</span></div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {BRAND_PRESETS.map(preset => {
-                          const isSelected = form.brandColor === preset.brandColor && passDesign.accentColor === preset.accentColor
+                          const isSelected = form.brandColor === preset.brandColor
                           return (
                             <button
                               key={preset.id}
@@ -635,7 +629,7 @@ export function ProgramEditor() {
                               onClick={() => setForm(f => ({ ...f, brandColor: preset.brandColor, design: { ...passDesign, accentColor: preset.accentColor, cardStyle: preset.cardStyle } }))}
                               className={`min-h-11 rounded-lg border p-2 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${isSelected ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-slate-300'}`}
                             >
-                              <span className="mb-1 flex h-4 overflow-hidden rounded"><span className="w-1/2" style={{ backgroundColor: preset.brandColor }} /><span className="w-1/2" style={{ backgroundColor: preset.accentColor }} /></span>
+                              <span className="mb-1 block h-4 rounded" style={{ backgroundColor: preset.brandColor }} />
                               <span className="block text-[11px] font-bold text-slate-800">{preset.name}</span>
                             </button>
                           )
